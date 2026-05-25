@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "outDir": "dist/server",
+    "rootDir": ".",
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["server/src/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "client", "dist"]
+}

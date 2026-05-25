@@ -1,0 +1,86 @@
+{
+  "seed-call-001": {
+    "kpi_scores": [
+      {"kpi": "appointment_booked", "passed": true, "confidence": 0.95, "evidence": "Agent confirmed: 'Perfect, I have you down for Tuesday at 2pm. You'll receive a confirmation email.'"},
+      {"kpi": "objection_handled", "passed": true, "confidence": 0.88, "evidence": "Prospect raised pricing concern; agent reframed with ROI: 'Most clients recover the cost within 90 days.'"},
+      {"kpi": "qualification_completed", "passed": true, "confidence": 0.92, "evidence": "Agent collected budget ($2-5k/month), timeline (Q3), and confirmed prospect is the decision maker."},
+      {"kpi": "follow_up_scheduled", "passed": true, "confidence": 0.85, "evidence": "Confirmation email promised with calendar invite."},
+      {"kpi": "urgency_created", "passed": true, "confidence": 0.80, "evidence": "Agent mentioned limited onboarding slots in Q3, creating natural urgency."}
+    ],
+    "overall_score": 0.88,
+    "recommendations": [],
+    "use_actions": []
+  },
+  "seed-call-002": {
+    "kpi_scores": [
+      {"kpi": "appointment_booked", "passed": false, "confidence": 0.92, "evidence": "Prospect said 'I'm definitely interested' at 3:24 but agent ended call without proposing a meeting time."},
+      {"kpi": "objection_handled", "passed": true, "confidence": 0.75, "evidence": "Agent acknowledged time concern and offered flexible scheduling."},
+      {"kpi": "qualification_completed", "passed": false, "confidence": 0.88, "evidence": "Agent never asked about budget or confirmed decision-maker status."},
+      {"kpi": "follow_up_scheduled", "passed": false, "confidence": 0.90, "evidence": "Call ended with 'I'll send you some information' — no specific follow-up time agreed."},
+      {"kpi": "urgency_created", "passed": false, "confidence": 0.70, "evidence": "No urgency framing used. Prospect left with 'let me think about it.'"}
+    ],
+    "overall_score": 0.28,
+    "recommendations": [
+      {
+        "priority": "high",
+        "target_kpi_name": "appointment_booked",
+        "target_type": "prompt",
+        "action": "Add a direct booking ask after positive interest signal",
+        "suggested_change": "When prospect signals interest ('sounds great', 'I'm interested', 'definitely'), immediately follow with: 'Perfect — I have Tuesday at 2pm or Thursday at 10am open. Which works better for you?'",
+        "transcript_timestamp": "3:24"
+      },
+      {
+        "priority": "medium",
+        "target_kpi_name": "qualification_completed",
+        "target_type": "prompt",
+        "action": "Add qualification questions before closing",
+        "suggested_change": "Add a natural qualification section: 'To make sure I connect you with the right person on our team — what's your typical monthly budget for this type of solution, and are you the main decision maker or do others need to be involved?'",
+        "transcript_timestamp": "2:10"
+      },
+      {
+        "priority": "medium",
+        "target_kpi_name": "urgency_created",
+        "target_type": "script_step",
+        "action": "Introduce a closing urgency frame",
+        "suggested_change": "Before closing: 'We're only taking on 3 new clients in Q3 and two slots are already filled. I'd hate for you to miss out — can we get a call on the calendar now while I still have availability?'",
+        "transcript_timestamp": "4:15"
+      }
+    ],
+    "use_actions": [
+      {
+        "reason": "Prospect expressed strong interest ('definitely interested') but no appointment was booked. Manual follow-up within 24 hours recommended.",
+        "transcript_timestamp": "3:24",
+        "action_required": "human_followup"
+      }
+    ]
+  },
+  "seed-call-003": {
+    "kpi_scores": [
+      {"kpi": "appointment_booked", "passed": false, "confidence": 0.85, "evidence": "Prospect asked 'what does the next step look like?' but agent only described the process without booking anything."},
+      {"kpi": "objection_handled", "passed": false, "confidence": 0.88, "evidence": "Prospect said 'we tried something similar before and it didn't work.' Agent said 'I understand' and moved on without addressing the concern."},
+      {"kpi": "qualification_completed", "passed": true, "confidence": 0.78, "evidence": "Budget ($3-8k), timeline (next quarter), and decision authority confirmed."},
+      {"kpi": "follow_up_scheduled", "passed": false, "confidence": 0.82, "evidence": "Call ended without any agreed next step."},
+      {"kpi": "urgency_created", "passed": false, "confidence": 0.65, "evidence": "No urgency framing attempted."}
+    ],
+    "overall_score": 0.22,
+    "recommendations": [
+      {
+        "priority": "high",
+        "target_kpi_name": "objection_handled",
+        "target_type": "script_step",
+        "action": "Add a past-failure objection handling script",
+        "suggested_change": "When prospect mentions a prior bad experience: 'That's really valuable context — can you tell me what specifically didn't work? [Listen] Got it. The way we're different is [specific differentiator]. What would need to be true for this to be worth a 30-minute conversation?'",
+        "transcript_timestamp": "2:45"
+      },
+      {
+        "priority": "high",
+        "target_kpi_name": "appointment_booked",
+        "target_type": "prompt",
+        "action": "Convert next-step interest into a booked appointment",
+        "suggested_change": "When prospect asks about next steps, answer AND close: 'The next step is a 30-minute strategy call with our specialist. I have Wednesday at 3pm or Friday at 11am available this week — which works for you?'",
+        "transcript_timestamp": "4:02"
+      }
+    ],
+    "use_actions": []
+  }
+}

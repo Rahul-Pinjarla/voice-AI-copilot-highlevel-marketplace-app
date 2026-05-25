@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0c29"/>
+      <stop offset="50%" style="stop-color:#1a1a4e"/>
+      <stop offset="100%" style="stop-color:#0d1b3e"/>
+    </linearGradient>
+    <linearGradient id="micGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#c084fc;stop-opacity:0.1"/>
+    </linearGradient>
+    <radialGradient id="glowCenter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#818cf8;stop-opacity:0.25"/>
+      <stop offset="100%" style="stop-color:#818cf8;stop-opacity:0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="circleClip">
+      <circle cx="250" cy="250" r="230"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="500" fill="url(#bgGrad)" rx="20"/>
+
+  <!-- Radial glow behind mic -->
+  <circle cx="250" cy="230" r="160" fill="url(#glowCenter)"/>
+
+  <!-- Animated-style concentric rings -->
+  <circle cx="250" cy="230" r="170" fill="none" stroke="url(#ringGrad)" stroke-width="1.5" opacity="0.5"/>
+  <circle cx="250" cy="230" r="140" fill="none" stroke="#818cf8" stroke-width="1" opacity="0.3"/>
+  <circle cx="250" cy="230" r="110" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.2"/>
+
+  <!-- Dot grid pattern (subtle AI aesthetic) -->
+  <g opacity="0.12">
+    <circle cx="80" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="110" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="140" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="80" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="110" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="140" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="360" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="390" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="420" cy="80" r="1.5" fill="#818cf8"/>
+    <circle cx="360" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="390" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="420" cy="110" r="1.5" fill="#818cf8"/>
+    <circle cx="80" cy="380" r="1.5" fill="#818cf8"/>
+    <circle cx="110" cy="380" r="1.5" fill="#818cf8"/>
+    <circle cx="80" cy="410" r="1.5" fill="#818cf8"/>
+    <circle cx="110" cy="410" r="1.5" fill="#818cf8"/>
+    <circle cx="390" cy="380" r="1.5" fill="#818cf8"/>
+    <circle cx="420" cy="380" r="1.5" fill="#818cf8"/>
+    <circle cx="390" cy="410" r="1.5" fill="#818cf8"/>
+    <circle cx="420" cy="410" r="1.5" fill="#818cf8"/>
+  </g>
+
+  <!-- Waveform bars - left side -->
+  <g filter="url(#glow)" opacity="0.85">
+    <!-- Left waveform -->
+    <rect x="42"  y="210" width="7" height="40"  rx="4" fill="#6366f1"/>
+    <rect x="55"  y="196" width="7" height="68"  rx="4" fill="#818cf8"/>
+    <rect x="68"  y="183" width="7" height="94"  rx="4" fill="#a78bfa"/>
+    <rect x="81"  y="200" width="7" height="60"  rx="4" fill="#818cf8"/>
+    <rect x="94"  y="215" width="7" height="30"  rx="4" fill="#6366f1"/>
+    <rect x="107" y="205" width="7" height="50"  rx="4" fill="#818cf8"/>
+    <rect x="120" y="192" width="7" height="76"  rx="4" fill="#c084fc"/>
+    <rect x="133" y="208" width="7" height="44"  rx="4" fill="#818cf8"/>
+
+    <!-- Right waveform -->
+    <rect x="360" y="215" width="7" height="30"  rx="4" fill="#6366f1"/>
+    <rect x="373" y="200" width="7" height="60"  rx="4" fill="#818cf8"/>
+    <rect x="386" y="183" width="7" height="94"  rx="4" fill="#a78bfa"/>
+    <rect x="399" y="196" width="7" height="68"  rx="4" fill="#818cf8"/>
+    <rect x="412" y="205" width="7" height="50"  rx="4" fill="#818cf8"/>
+    <rect x="425" y="192" width="7" height="76"  rx="4" fill="#c084fc"/>
+    <rect x="438" y="210" width="7" height="40"  rx="4" fill="#6366f1"/>
+    <rect x="451" y="218" width="7" height="24"  rx="4" fill="#818cf8"/>
+  </g>
+
+  <!-- Microphone body -->
+  <g filter="url(#softGlow)">
+    <rect x="225" y="140" width="50" height="80" rx="25" fill="url(#micGrad)"/>
+    <!-- Mic highlight -->
+    <rect x="232" y="148" width="14" height="30" rx="7" fill="white" opacity="0.2"/>
+  </g>
+
+  <!-- Mic stand arc -->
+  <path d="M 205 230 Q 205 275 250 275 Q 295 275 295 230" fill="none" stroke="#818cf8" stroke-width="3.5" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- Mic stand vertical -->
+  <line x1="250" y1="275" x2="250" y2="300" stroke="#818cf8" stroke-width="3.5" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- Mic stand base -->
+  <line x1="225" y1="300" x2="275" y2="300" stroke="#818cf8" stroke-width="3.5" stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- AI frequency dots along arc (neural pulse effect) -->
+  <g filter="url(#glow)" opacity="0.9">
+    <circle cx="210" cy="245" r="3" fill="#c084fc"/>
+    <circle cx="220" cy="268" r="2.5" fill="#a78bfa"/>
+    <circle cx="250" cy="278" r="3.5" fill="#818cf8"/>
+    <circle cx="280" cy="268" r="2.5" fill="#a78bfa"/>
+    <circle cx="290" cy="245" r="3" fill="#c084fc"/>
+  </g>
+
+  <!-- Horizontal AI analyser bars (bottom section) -->
+  <g opacity="0.75">
+    <text x="250" y="355" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#818cf8" text-anchor="middle" letter-spacing="4" opacity="0.6">ANALYSING</text>
+    <!-- Progress bar track -->
+    <rect x="130" y="363" width="240" height="4" rx="2" fill="#1e1b4b"/>
+    <!-- Progress bar fill -->
+    <rect x="130" y="363" width="168" height="4" rx="2" fill="url(#micGrad)"/>
+    <!-- Small freq bars -->
+    <rect x="148" y="378" width="5" height="12" rx="2" fill="#6366f1" opacity="0.7"/>
+    <rect x="158" y="372" width="5" height="18" rx="2" fill="#818cf8" opacity="0.8"/>
+    <rect x="168" y="376" width="5" height="14" rx="2" fill="#a78bfa" opacity="0.9"/>
+    <rect x="178" y="370" width="5" height="20" rx="2" fill="#c084fc"/>
+    <rect x="188" y="374" width="5" height="16" rx="2" fill="#a78bfa" opacity="0.9"/>
+    <rect x="198" y="371" width="5" height="19" rx="2" fill="#818cf8" opacity="0.8"/>
+    <rect x="208" y="377" width="5" height="13" rx="2" fill="#6366f1" opacity="0.7"/>
+    <rect x="218" y="373" width="5" height="17" rx="2" fill="#818cf8" opacity="0.8"/>
+    <rect x="228" y="368" width="5" height="22" rx="2" fill="#c084fc"/>
+    <rect x="238" y="375" width="5" height="15" rx="2" fill="#a78bfa" opacity="0.9"/>
+    <rect x="248" y="379" width="5" height="11" rx="2" fill="#6366f1" opacity="0.6"/>
+    <rect x="258" y="374" width="5" height="16" rx="2" fill="#818cf8" opacity="0.5"/>
+    <rect x="268" y="378" width="5" height="12" rx="2" fill="#6366f1" opacity="0.4"/>
+    <rect x="278" y="376" width="5" height="14" rx="2" fill="#818cf8" opacity="0.35"/>
+    <rect x="288" y="379" width="5" height="11" rx="2" fill="#6366f1" opacity="0.3"/>
+    <rect x="298" y="381" width="5" height="9"  rx="2" fill="#6366f1" opacity="0.25"/>
+    <rect x="308" y="382" width="5" height="8"  rx="2" fill="#6366f1" opacity="0.2"/>
+    <rect x="318" y="383" width="5" height="7"  rx="2" fill="#6366f1" opacity="0.15"/>
+    <rect x="328" y="384" width="5" height="6"  rx="2" fill="#6366f1" opacity="0.1"/>
+    <rect x="338" y="385" width="5" height="5"  rx="2" fill="#6366f1" opacity="0.08"/>
+  </g>
+
+  <!-- Title -->
+  <text x="250" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle" letter-spacing="1" opacity="0.95">Voice AI Analyser</text>
+  <text x="250" y="453" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#818cf8" text-anchor="middle" letter-spacing="2" opacity="0.7">POWERED BY AI</text>
+
+  <!-- Corner accent lines -->
+  <line x1="30" y1="50" x2="70" y2="50" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="30" y1="50" x2="30" y2="90" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="470" y1="50" x2="430" y2="50" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="470" y1="50" x2="470" y2="90" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="30" y1="470" x2="70" y2="470" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="30" y1="470" x2="30" y2="430" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="470" y1="470" x2="430" y2="470" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+  <line x1="470" y1="470" x2="470" y2="430" stroke="#818cf8" stroke-width="1.5" opacity="0.4"/>
+</svg>
