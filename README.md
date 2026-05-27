@@ -4,6 +4,14 @@ A HighLevel Marketplace app that automates the Monitor and Analyze phases for Vo
 
 ---
 
+## Screenshots
+<img width="1236" height="692" alt="Screenshot 2026-05-27 at 05 39 08" src="https://github.com/user-attachments/assets/5ecbfef1-244f-46f9-8cf1-72ccb051f6f5" />
+
+<img width="1240" height="681" alt="Screenshot 2026-05-27 at 05 40 06" src="https://github.com/user-attachments/assets/e570df3b-8b28-4435-86a6-0f56d7c74a7c" />
+
+<img width="971" height="458" alt="Screenshot 2026-05-27 at 05 40 21" src="https://github.com/user-attachments/assets/513089c1-5b22-4cc4-8e0b-e6c29cc01e6d" />
+
+
 ## Architecture
 
 ```
