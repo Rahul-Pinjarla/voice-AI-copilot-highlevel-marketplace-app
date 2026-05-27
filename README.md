@@ -51,6 +51,15 @@ A HighLevel Marketplace app that automates the Monitor and Analyze phases for Vo
 
 **KPI versioning** — Every time the KPI config or agent settings change, a new `agent_version` is created. Calls are tagged with the version active at ingestion time, so performance data stays accurate across config changes.
 
+**Agent on/off toggle** — Each agent has an `active` flag controlled by a toggle in Agent Detail → Settings. When turned off, the agent is paused: incoming webhook calls are still stored and logged but `analyzeCall` is never queued. Turning it back on resumes analysis for all subsequent calls. The toggle shows a confirmation modal before changing state so accidental clicks don't silently disable an active agent.
+
+**Manual vs. auto mode** — Each agent operates in one of two modes, also set in Agent Detail → Settings:
+
+- **Manual** — Analysis produces recommendations but nothing is applied automatically. The user reviews each recommendation and clicks "Apply to Agent" (for prompt/config changes) or marks action items handled when they are done. This is the safe default for production agents.
+- **Auto** — When a call is analyzed, applicable recommendations (prompt updates and numeric config changes) are immediately written back to the GHL agent via the API without user intervention. Recommendations that require a human step — specifically `script_step` type changes that involve updating external scripts or playbooks — are converted into Action Items instead of being auto-applied, because they cannot be completed by an API write alone.
+
+In both modes, all recommendations and action items remain visible in the UI; auto mode just removes the manual apply step for the subset that can be fully resolved via the GHL API.
+
 **Frontend** — Vue 3 SPA embedded in the GHL iframe via SSO. Three main views: Dashboard (snapshot metrics + action items inbox), Agent Detail (Performance chart, Calls, KPIs, Recommendations, Action Items, Settings tabs), and Call Detail (transcript with failure highlights + side-by-side KPI checks).
 
 ### Stack
@@ -154,6 +163,9 @@ Inserts 3 synthetic calls with pre-computed analyses so the dashboard has data i
 | LLM KPI suggestion from agent system prompt | **Real** |
 | Per-recommendation updated prompt text | **Real** |
 | Combined prompt with all changes integrated | **Real** |
+| Agent on/off toggle (pause/resume analysis) | **Real** |
+| Manual mode (user-applied recommendations) | **Real** |
+| Auto mode (prompt + config applied via GHL API; script steps → action items) | **Real** |
 | Performance bar chart | **Real** (computed from DB) |
 | Seed transcripts (`npm run seed`) | **Synthetic** — representative sales call transcripts, not from real GHL calls |
 
