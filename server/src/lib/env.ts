@@ -17,6 +17,7 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().optional(),
   NODE_ENV: z.string().default("development"),
+  GHL_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const result = schema.safeParse(process.env);

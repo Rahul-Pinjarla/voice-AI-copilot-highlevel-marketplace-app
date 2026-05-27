@@ -65,6 +65,12 @@ export function softDeleteInstallation(db: Database.Database, locationId: string
 
 // ── Agents ─────────────────────────────────────────────────────────────────────
 
+type AgentRow = Omit<Agent, "active"> & { active: number };
+
+function coerceAgent(row: AgentRow): Agent {
+  return { ...row, active: Boolean(row.active) };
+}
+
 export function upsertAgent(
   db: Database.Database,
   data: {
@@ -84,24 +90,22 @@ export function upsertAgent(
       db.prepare("UPDATE agents SET name = ?, system_prompt = COALESCE(?, system_prompt) WHERE id = ?")
         .run(newName, data.system_prompt ?? null, existing.id);
     }
-    return db.prepare("SELECT * FROM agents WHERE id = ?").get(existing.id) as Agent;
+    return coerceAgent(db.prepare("SELECT * FROM agents WHERE id = ?").get(existing.id) as AgentRow);
   }
 
   const id = randomUUID();
   db.prepare(`
-    INSERT OR IGNORE INTO agents (id, location_id, ghl_agent_id, name, system_prompt)
-    VALUES (@id, @location_id, @ghl_agent_id, @name, @system_prompt)
+    INSERT OR IGNORE INTO agents (id, location_id, ghl_agent_id, name, system_prompt, active)
+    VALUES (@id, @location_id, @ghl_agent_id, @name, @system_prompt, 0)
   `).run({ id, ...data, name: data.name ?? "Unknown Agent", system_prompt: data.system_prompt ?? null });
 
-  return db
-    .prepare("SELECT * FROM agents WHERE id = ?")
-    .get(id) as Agent;
+  return coerceAgent(db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as AgentRow);
 }
 
 export function getAgentsByLocation(db: Database.Database, locationId: string): Agent[] {
-  return db
+  return (db
     .prepare("SELECT * FROM agents WHERE location_id = ? ORDER BY created_at DESC")
-    .all(locationId) as Agent[];
+    .all(locationId) as Array<AgentRow>).map(coerceAgent);
 }
 
 export function getAgent(
@@ -109,11 +113,10 @@ export function getAgent(
   agentId: string,
   locationId: string,
 ): Agent | null {
-  return (
-    (db
-      .prepare("SELECT * FROM agents WHERE id = ? AND location_id = ?")
-      .get(agentId, locationId) as Agent | undefined) ?? null
-  );
+  const row = db
+    .prepare("SELECT * FROM agents WHERE id = ? AND location_id = ?")
+    .get(agentId, locationId) as (AgentRow) | undefined;
+  return row ? coerceAgent(row) : null;
 }
 
 export function updateAgent(
@@ -122,14 +125,14 @@ export function updateAgent(
   locationId: string,
   data: Partial<Pick<Agent, "name" | "system_prompt" | "configured">>,
 ): void {
-  const fields = Object.keys(data)
-    .map((k) => `${k} = @${k}`)
-    .join(", ");
-  db.prepare(`UPDATE agents SET ${fields} WHERE id = @id AND location_id = @locationId`).run({
-    ...data,
-    id: agentId,
-    locationId,
-  });
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  if (data.name !== undefined) { setClauses.push("name = ?"); values.push(data.name); }
+  if (data.system_prompt !== undefined) { setClauses.push("system_prompt = ?"); values.push(data.system_prompt); }
+  if (data.configured !== undefined) { setClauses.push("configured = ?"); values.push(data.configured ? 1 : 0); }
+  if (setClauses.length === 0) return;
+  db.prepare(`UPDATE agents SET ${setClauses.join(", ")} WHERE id = ? AND location_id = ?`)
+    .run(...values, agentId, locationId);
 }
 
 // ── KPI configs ───────────────────────────────────────────────────────────────
@@ -229,7 +232,7 @@ export function getCallsByAgent(
   return db.prepare(`
     SELECT
       c.*,
-      a.overall_score,
+      CASE WHEN a.overall_score IS NOT NULL THEN MIN(1.0, MAX(0.0, a.overall_score)) END AS overall_score,
       a.id          AS analysis_id,
       a.kpi_scores_json,
       json_extract(c.metadata, '$.summary')      AS summary,
@@ -237,6 +240,7 @@ export function getCallsByAgent(
       json_extract(c.metadata, '$.callerNumber') AS caller_number
     FROM calls c
     LEFT JOIN analyses a ON a.call_id = c.id
+      AND a.id = (SELECT id FROM analyses WHERE call_id = c.id ORDER BY created_at DESC LIMIT 1)
     WHERE c.agent_id = ? AND c.location_id = ? ${versionFilter}
     ORDER BY c.ingested_at DESC
     LIMIT ?
@@ -285,8 +289,8 @@ export function insertAnalysis(
   data: Omit<Analysis, "created_at">,
 ): void {
   db.prepare(`
-    INSERT INTO analyses (id, call_id, kpi_config_version_id, kpi_scores_json, overall_score, error, combined_prompt)
-    VALUES (@id, @call_id, @kpi_config_version_id, @kpi_scores_json, @overall_score, @error, @combined_prompt)
+    INSERT INTO analyses (id, call_id, kpi_config_version_id, kpi_scores_json, overall_score, error, combined_prompt, ai_summary)
+    VALUES (@id, @call_id, @kpi_config_version_id, @kpi_scores_json, @overall_score, @error, @combined_prompt, @ai_summary)
   `).run(data);
 }
 
@@ -379,8 +383,8 @@ export function insertUseActions(
   actions: Omit<UseAction, "status" | "handled_at">[],
 ): void {
   const stmt = db.prepare(`
-    INSERT INTO use_actions (id, analysis_id, reason, transcript_timestamp, action_required)
-    VALUES (@id, @analysis_id, @reason, @transcript_timestamp, @action_required)
+    INSERT INTO use_actions (id, analysis_id, reason, what_to_change, why, transcript_timestamp, action_required)
+    VALUES (@id, @analysis_id, @reason, @what_to_change, @why, @transcript_timestamp, @action_required)
   `);
   db.transaction(() => {
     for (const action of actions) stmt.run(action);
@@ -406,17 +410,52 @@ export function getPendingUseActionsForLocation(
   db: Database.Database,
   locationId: string,
   limit = 20,
-): Array<UseAction & { call_id: string; agent_id: string; agent_name: string }> {
+): Array<UseAction & { call_id: string; agent_id: string; agent_name: string; agent_version: number | null; version_created_at: number | null }> {
   return db.prepare(`
-    SELECT ua.*, c.id as call_id, ag.id as agent_id, ag.name as agent_name
+    SELECT ua.*, c.id as call_id, ag.id as agent_id, ag.name as agent_name,
+           av.version as agent_version, av.created_at as version_created_at
     FROM use_actions ua
     JOIN analyses an ON an.id = ua.analysis_id
     JOIN calls c ON c.id = an.call_id
     JOIN agents ag ON ag.id = c.agent_id
+    LEFT JOIN agent_versions av ON av.id = c.agent_version_id
     WHERE c.location_id = ? AND ua.status = 'pending'
     ORDER BY ua.rowid DESC
     LIMIT ?
-  `).all(locationId, limit) as Array<UseAction & { call_id: string; agent_id: string; agent_name: string }>;
+  `).all(locationId, limit) as Array<UseAction & { call_id: string; agent_id: string; agent_name: string; agent_version: number | null; version_created_at: number | null }>;
+}
+
+export function getPendingRecommendationsForLocation(
+  db: Database.Database,
+  locationId: string,
+  limit = 20,
+): Array<{
+  id: string; target_kpi_name: string; action: string; suggested_change: string | null;
+  target_type: string; priority: string; auto_applied: boolean;
+  call_id: string; agent_id: string; agent_name: string;
+  agent_version: number | null; version_created_at: number | null;
+}> {
+  return db.prepare(`
+    SELECT r.id, r.target_kpi_name, r.action, r.suggested_change, r.target_type,
+           r.priority, r.auto_applied,
+           c.id as call_id, ag.id as agent_id, ag.name as agent_name,
+           av.version as agent_version, av.created_at as version_created_at
+    FROM recommendations r
+    JOIN analyses an ON an.id = r.analysis_id
+    JOIN calls c ON c.id = an.call_id
+    JOIN agents ag ON ag.id = c.agent_id
+    LEFT JOIN agent_versions av ON av.id = c.agent_version_id
+    WHERE ag.location_id = ? AND r.status = 'pending'
+    ORDER BY COALESCE(av.version, 0) DESC,
+             CASE r.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+             r.rowid DESC
+    LIMIT ?
+  `).all(locationId, limit) as Array<{
+    id: string; target_kpi_name: string; action: string; suggested_change: string | null;
+    target_type: string; priority: string; auto_applied: boolean;
+    call_id: string; agent_id: string; agent_name: string;
+    agent_version: number | null; version_created_at: number | null;
+  }>;
 }
 
 // ── Dashboard aggregate ───────────────────────────────────────────────────────
@@ -425,8 +464,10 @@ export interface DashboardAgent {
   id: string;
   name: string;
   configured: number;
+  active: boolean;
   calls_today: number;
   pass_rate: number | null;
+  last_call_score: number | null;
   top_failing_kpi: string | null;
   active_recs: number;
 }
@@ -442,8 +483,17 @@ export function getDashboardData(
       ag.id,
       ag.name,
       ag.configured,
+      ag.active,
       COUNT(DISTINCT CASE WHEN c.ingested_at >= @todayStart THEN c.id END) as calls_today,
-      AVG(CASE WHEN an.overall_score IS NOT NULL THEN an.overall_score END) as pass_rate,
+      AVG(CASE WHEN an.overall_score IS NOT NULL THEN MIN(1.0, MAX(0.0, an.overall_score)) END) as pass_rate,
+      (
+        SELECT MIN(1.0, MAX(0.0, a2.overall_score))
+        FROM calls c2
+        JOIN analyses a2 ON a2.call_id = c2.id
+        WHERE c2.agent_id = ag.id AND a2.overall_score IS NOT NULL
+        ORDER BY c2.ingested_at DESC
+        LIMIT 1
+      ) as last_call_score,
       (
         SELECT r2.target_kpi_name
         FROM recommendations r2
@@ -458,6 +508,7 @@ export function getDashboardData(
     FROM agents ag
     LEFT JOIN calls c ON c.agent_id = ag.id AND c.location_id = @locationId
     LEFT JOIN analyses an ON an.call_id = c.id
+      AND an.id = (SELECT id FROM analyses WHERE call_id = c.id ORDER BY created_at DESC LIMIT 1)
     LEFT JOIN recommendations r ON r.analysis_id = an.id
     WHERE ag.location_id = @locationId
     GROUP BY ag.id
@@ -588,4 +639,150 @@ export function getLatestAgentVersion(
   return (db
     .prepare("SELECT * FROM agent_versions WHERE agent_id = ? ORDER BY version DESC LIMIT 1")
     .get(agentId) as AgentVersion | undefined) ?? null;
+}
+
+// ── Agent mutations ───────────────────────────────────────────────────────────
+
+export function updateAgentMode(
+  db: Database.Database,
+  agentId: string,
+  locationId: string,
+  mode: "manual" | "auto",
+): void {
+  db.prepare("UPDATE agents SET mode = ? WHERE id = ? AND location_id = ?").run(mode, agentId, locationId);
+}
+
+export function updateAgentActive(
+  db: Database.Database,
+  agentId: string,
+  locationId: string,
+  active: boolean,
+): void {
+  db.prepare("UPDATE agents SET active = ? WHERE id = ? AND location_id = ?").run(active ? 1 : 0, agentId, locationId);
+}
+
+export function updateAgentSuccessCriteria(
+  db: Database.Database,
+  agentId: string,
+  locationId: string,
+  criteria: string,
+): void {
+  db.prepare("UPDATE agents SET success_criteria = ? WHERE id = ? AND location_id = ?").run(criteria, agentId, locationId);
+}
+
+export function updateAgentKpiSuggestions(
+  db: Database.Database,
+  agentId: string,
+  locationId: string,
+  json: string,
+): void {
+  db.prepare("UPDATE agents SET kpi_suggestions_json = ? WHERE id = ? AND location_id = ?").run(json, agentId, locationId);
+}
+
+export function updateAgentSystemPrompt(
+  db: Database.Database,
+  agentId: string,
+  prompt: string,
+): void {
+  db.prepare("UPDATE agents SET system_prompt = ? WHERE id = ?").run(prompt, agentId);
+}
+
+// ── Call mutations ────────────────────────────────────────────────────────────
+
+export function getDoneCallIdsAndResetAll(
+  db: Database.Database,
+  agentId: string,
+): string[] {
+  const calls = db
+    .prepare("SELECT id FROM calls WHERE agent_id = ? AND analysis_status = 'done'")
+    .all(agentId) as Array<{ id: string }>;
+  db.prepare("UPDATE calls SET analysis_status = 'pending' WHERE agent_id = ?").run(agentId);
+  return calls.map((c) => c.id);
+}
+
+// ── Use action mutations ──────────────────────────────────────────────────────
+
+export function dismissUseAction(db: Database.Database, actionId: string): void {
+  db.prepare("UPDATE use_actions SET status = 'dismissed' WHERE id = ?").run(actionId);
+}
+
+// ── Recommendation queries ────────────────────────────────────────────────────
+
+export interface RecommendationWithContext {
+  id: string;
+  target_type: string;
+  agent_field: string | null;
+  suggested_value: string | null;
+  updated_prompt: string | null;
+  action: string;
+  suggested_change: string | null;
+  analysis_id: string;
+  location_id: string;
+  ghl_agent_id: string | null;
+  agent_id: string;
+}
+
+export function getRecommendationWithContext(
+  db: Database.Database,
+  recId: string,
+  locationId: string,
+): RecommendationWithContext | null {
+  return (db.prepare(`
+    SELECT r.id, r.target_type, r.agent_field, r.suggested_value, r.updated_prompt,
+           r.action, r.suggested_change, r.analysis_id,
+           c.location_id, ag.ghl_agent_id, ag.id as agent_id
+    FROM recommendations r
+    JOIN analyses an ON an.id = r.analysis_id
+    JOIN calls c ON c.id = an.call_id
+    JOIN agents ag ON ag.id = c.agent_id
+    WHERE r.id = ? AND c.location_id = ?
+  `).get(recId, locationId) as RecommendationWithContext | undefined) ?? null;
+}
+
+export interface RecommendationForAgent {
+  id: string;
+  target_type: string;
+  agent_field: string | null;
+  suggested_value: string | null;
+  updated_prompt: string | null;
+  action: string;
+  suggested_change: string | null;
+  analysis_id: string;
+}
+
+export function getRecommendationForAgent(
+  db: Database.Database,
+  recId: string,
+  agentId: string,
+  locationId: string,
+): RecommendationForAgent | null {
+  return (db.prepare(`
+    SELECT r.id, r.target_type, r.agent_field, r.suggested_value, r.updated_prompt,
+           r.action, r.suggested_change, r.analysis_id
+    FROM recommendations r
+    JOIN analyses an ON an.id = r.analysis_id
+    JOIN calls c ON c.id = an.call_id
+    WHERE r.id = ? AND c.agent_id = ? AND c.location_id = ?
+  `).get(recId, agentId, locationId) as RecommendationForAgent | undefined) ?? null;
+}
+
+export function markRecommendationAutoApplied(db: Database.Database, recId: string): void {
+  db.prepare(
+    "UPDATE recommendations SET status = 'applied', auto_applied = 1, applied_at = unixepoch() WHERE id = ?",
+  ).run(recId);
+}
+
+// ── Use action queries ────────────────────────────────────────────────────────
+
+export function getUseActionForLocation(
+  db: Database.Database,
+  actionId: string,
+  locationId: string,
+): { id: string } | null {
+  return (db.prepare(`
+    SELECT ua.id FROM use_actions ua
+    JOIN analyses an ON an.id = ua.analysis_id
+    JOIN calls c ON c.id = an.call_id
+    WHERE ua.id = ? AND c.location_id = ?
+  `).get(actionId, locationId) as { id: string } | undefined) ?? null;
 }

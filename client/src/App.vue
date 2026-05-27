@@ -5,6 +5,13 @@
       <div class="spinner" />
       <p>Connecting to HighLevel…</p>
     </div>
+    <div v-else-if="sessionState === 'not_embedded' && route.query.installed === 'true'" class="state-screen installed-screen">
+      <div class="installed-check">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2>Installation successful</h2>
+      <p>Go back to the GHL Marketplace app to open your Voice AI Copilot dashboard.</p>
+    </div>
     <div v-else-if="sessionState === 'not_embedded'" class="state-screen not-embedded">
       <div class="state-icon">
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="32" height="32" rx="6"/><path d="M13 20h14M20 13v14"/></svg>
@@ -17,7 +24,7 @@
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="20" cy="20" r="16"/><path d="M20 12v10M20 28v1"/></svg>
       </div>
       <h2>Authentication failed</h2>
-      <p>Could not verify your HighLevel session. Try refreshing the page.</p>
+      <p>Could not verify your HighLevel session. Try reinstalling the app from the GHL Marketplace.</p>
     </div>
 
     <!-- ── App layout ─────────────────────────────────────────────── -->
@@ -53,7 +60,7 @@
             class="nav-agent"
             :class="{ active: route.path === `/agents/${agent.id}` }"
           >
-            <span class="agent-dot" :style="{ background: healthColor(agent.pass_rate) }" />
+            <span class="agent-dot" :style="{ background: agent.active ? '#16a34a' : '#9ca3af' }" />
             <span class="nav-agent-name">{{ agent.name }}</span>
             <span v-if="agent.pass_rate !== null" class="nav-agent-rate" :style="{ color: route.path === `/agents/${agent.id}` ? 'rgba(255,255,255,0.8)' : healthColor(agent.pass_rate) }">
               {{ pct(agent.pass_rate) }}
@@ -66,6 +73,26 @@
         <router-view />
       </main>
     </template>
+
+    <!-- ── Toast notifications ──────────────────────────────────── -->
+    <Teleport to="body">
+      <div class="toast-stack">
+        <TransitionGroup name="toast">
+          <div
+            v-for="t in toasts"
+            :key="t.id"
+            :class="['toast', `toast--${t.type}`]"
+          >
+            <svg v-if="t.type === 'error'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg v-else-if="t.type === 'success'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="toast-msg">{{ t.message }}</span>
+            <button class="toast-close" @click="dismiss(t.id)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </TransitionGroup>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -74,9 +101,11 @@ import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useDashboard } from "@/composables/useDashboard";
 import { initSession, sessionState } from "@/composables/useSession";
+import { useToast } from "@/composables/useToast";
 
 const route = useRoute();
 const { agents, useActions, loading, load } = useDashboard();
+const { toasts, dismiss } = useToast();
 
 const humanFollowupCount = computed(() => useActions.value.filter((ua) => ua.action_required === "human_followup").length);
 
@@ -297,6 +326,14 @@ body { background: var(--bg); }
 .state-screen h2 { font-size: 19px; font-weight: 600; letter-spacing: -.2px; }
 .state-screen p { color: var(--color-text-muted); max-width: 360px; font-size: 13px; line-height: 1.5; }
 
+.installed-screen { background: var(--bg); }
+.installed-check {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: #16a34a; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 8px rgba(22,163,74,0.12);
+}
+
 /* ── Spinner ────────────────────────────────────────────────────── */
 .spinner {
   width: 28px; height: 28px;
@@ -342,14 +379,14 @@ body { background: var(--bg); }
   font-family: inherit;
   -webkit-font-smoothing: antialiased;
 }
-.btn:hover { background: var(--surface-2); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
 .btn-primary { background: var(--ink-1); color: #fff; border-color: var(--ink-1); }
 .btn-primary:hover:not(:disabled) { background: #1c1e25; }
 .btn-secondary { background: var(--surface); color: var(--ink-1); border-color: var(--border-strong); }
 .btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
 .btn-ghost { background: transparent; color: var(--ink-2); border-color: transparent; padding: 4px 8px; }
-.btn-ghost:hover { color: var(--ink-1); background: var(--surface-2); }
+.btn-ghost:hover:not(:disabled) { color: var(--ink-1); background: var(--surface-2); }
 .btn-sm { padding: 4px 9px; font-size: 12px; border-radius: 6px; }
 
 a { color: inherit; text-decoration: none; }
@@ -363,4 +400,65 @@ a:hover { text-decoration: none; }
   line-height: 1.5;
 }
 .empty-state .icon { font-size: 28px; margin-bottom: 10px; opacity: .5; }
+
+/* ── Auto-mode overlay (teleported to body) ─────────────────────── */
+.auto-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(15, 15, 20, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+}
+.auto-overlay-card {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: 20px;
+  padding: 36px 44px;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.14);
+}
+.auto-overlay-spinner-ring {
+  position: relative; width: 64px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+}
+.auto-overlay-arc { width: 64px; height: 64px; position: absolute; inset: 0; }
+.auto-overlay-arc-spin { animation: arc-spin 1s linear infinite; transform-origin: 22px 22px; }
+@keyframes arc-spin { to { transform: rotate(360deg); } }
+.auto-overlay-bolt { position: relative; z-index: 1; }
+.auto-overlay-label { font-size: 14px; font-weight: 500; color: #111; margin: 0; letter-spacing: -0.01em; }
+
+.overlay-fade-enter-active, .overlay-fade-leave-active { transition: opacity 0.2s ease; }
+.overlay-fade-enter-from, .overlay-fade-leave-to { opacity: 0; }
+.overlay-card-enter-active { transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+.overlay-card-enter-from { opacity: 0; transform: scale(0.95); }
+
+/* ── Toast stack ────────────────────────────────────────────────── */
+.toast-stack {
+  position: fixed; bottom: 20px; right: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 10000; pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  max-width: 340px; pointer-events: all;
+  border: 1px solid;
+}
+.toast--error   { background: #fff1f2; color: #991b1b; border-color: #fecaca; }
+.toast--success { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.toast--info    { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.toast-msg { flex: 1; line-height: 1.4; }
+.toast-close {
+  background: transparent; border: none; cursor: pointer;
+  padding: 2px; color: inherit; opacity: 0.6; flex-shrink: 0;
+  display: flex; align-items: center;
+}
+.toast-close:hover { opacity: 1; }
+.toast-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.toast-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.toast-enter-from   { opacity: 0; transform: translateY(8px); }
+.toast-leave-to     { opacity: 0; transform: translateX(20px); }
 </style>

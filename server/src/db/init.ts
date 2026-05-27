@@ -140,10 +140,16 @@ function runAlterMigrations(db: Database.Database): void {
   if (!recCols.includes("updated_prompt")) {
     db.exec("ALTER TABLE recommendations ADD COLUMN updated_prompt TEXT;");
   }
+  if (!recCols.includes("auto_applied")) {
+    db.exec("ALTER TABLE recommendations ADD COLUMN auto_applied INTEGER NOT NULL DEFAULT 0;");
+  }
 
   const analysisCols = (db.prepare("PRAGMA table_info(analyses)").all() as Array<{ name: string }>).map((c) => c.name);
   if (!analysisCols.includes("combined_prompt")) {
     db.exec("ALTER TABLE analyses ADD COLUMN combined_prompt TEXT;");
+  }
+  if (!analysisCols.includes("ai_summary")) {
+    db.exec("ALTER TABLE analyses ADD COLUMN ai_summary TEXT;");
   }
 
   const kpiCols = (db.prepare("PRAGMA table_info(kpi_configs)").all() as Array<{ name: string }>).map((c) => c.name);
@@ -168,9 +174,29 @@ function runAlterMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_agent_versions_agent ON agent_versions(agent_id, version DESC);
   `);
 
+  const agentCols = (db.prepare("PRAGMA table_info(agents)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!agentCols.includes("active")) {
+    db.exec("ALTER TABLE agents ADD COLUMN active INTEGER NOT NULL DEFAULT 0;");
+  }
+  if (!agentCols.includes("mode")) {
+    db.exec("ALTER TABLE agents ADD COLUMN mode TEXT NOT NULL DEFAULT 'manual';");
+  }
+  if (!agentCols.includes("success_criteria")) {
+    db.exec("ALTER TABLE agents ADD COLUMN success_criteria TEXT;");
+  }
+  if (!agentCols.includes("kpi_suggestions_json")) {
+    db.exec("ALTER TABLE agents ADD COLUMN kpi_suggestions_json TEXT;");
+  }
+
   const callCols = (db.prepare("PRAGMA table_info(calls)").all() as Array<{ name: string }>).map((c) => c.name);
   if (!callCols.includes("agent_version_id")) {
     db.exec("ALTER TABLE calls ADD COLUMN agent_version_id TEXT REFERENCES agent_versions(id);");
+  }
+
+  const useActionCols = (db.prepare("PRAGMA table_info(use_actions)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!useActionCols.includes("what_to_change")) {
+    db.exec("ALTER TABLE use_actions ADD COLUMN what_to_change TEXT;");
+    db.exec("ALTER TABLE use_actions ADD COLUMN why TEXT;");
   }
 
   // Backfill: create v1 agent_versions for agents that have KPI configs but no version yet

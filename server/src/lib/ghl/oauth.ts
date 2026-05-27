@@ -1,5 +1,11 @@
 import { env } from "../env";
 
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 10_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export const GHL_TOKEN_URL = "https://services.leadconnectorhq.com/oauth/token";
 export const GHL_AUTH_URL = "https://marketplace.gohighlevel.com/oauth/chooselocation";
 
@@ -23,7 +29,7 @@ export async function exchangeCode(code: string): Promise<TokenResponse> {
     redirect_uri: env.GHL_REDIRECT_URI,
   });
 
-  const res = await fetch(GHL_TOKEN_URL, {
+  const res = await fetchWithTimeout(GHL_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
@@ -46,7 +52,7 @@ export async function refreshToken(refresh_token: string): Promise<TokenResponse
     refresh_token,
   });
 
-  const res = await fetch(GHL_TOKEN_URL, {
+  const res = await fetchWithTimeout(GHL_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
@@ -77,7 +83,7 @@ export function expiresAt(expires_in: number): number {
 
 export async function getLocationToken(companyAccessToken: string, companyId: string, locationId: string): Promise<TokenResponse> {
   const params = new URLSearchParams({ companyId, locationId });
-  const res = await fetch("https://services.leadconnectorhq.com/oauth/locationToken", {
+  const res = await fetchWithTimeout("https://services.leadconnectorhq.com/oauth/locationToken", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${companyAccessToken}`,

@@ -9,6 +9,12 @@ export const locationId = ref<string>("");
 export async function initSession(): Promise<void> {
   sessionState.value = "loading";
 
+  // Post-OAuth install redirect — not inside GHL iframe, skip polling immediately
+  if (new URLSearchParams(window.location.search).get("installed") === "true") {
+    sessionState.value = "not_embedded";
+    return;
+  }
+
   // Retry-loop: poll REQUEST_USER_DATA every 300ms for up to 5 seconds
   const encrypted = await new Promise<string | null>((resolve) => {
     const deadline = Date.now() + 5000;

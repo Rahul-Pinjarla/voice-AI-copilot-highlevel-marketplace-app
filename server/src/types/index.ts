@@ -18,6 +18,10 @@ export interface Agent {
   system_prompt: string | null;
   configured: number;
   created_at: number;
+  active: boolean;
+  mode: "manual" | "auto";
+  success_criteria: string | null;
+  kpi_suggestions_json: string | null;
 }
 
 export interface KpiConfigVersion {
@@ -57,6 +61,7 @@ export interface Analysis {
   error: string | null;
   created_at: number;
   combined_prompt: string | null;
+  ai_summary: string | null;
 }
 
 export interface Recommendation {
@@ -68,6 +73,7 @@ export interface Recommendation {
   target_type: "prompt" | "script_step" | "agent_config";
   priority: "high" | "medium" | "low";
   status: "pending" | "applied" | "dismissed";
+  auto_applied: boolean;
   applied_at: number | null;
   transcript_timestamp: string | null;
   agent_field: string | null;
@@ -80,9 +86,11 @@ export interface UseAction {
   id: string;
   analysis_id: string;
   reason: string;
+  what_to_change: string | null;
+  why: string | null;
   transcript_timestamp: string | null;
   action_required: "human_followup" | "script_retraining";
-  status: "pending" | "handled";
+  status: "pending" | "handled" | "dismissed";
   handled_at: number | null;
 }
 
@@ -122,7 +130,7 @@ export interface CallAgentSnapshot {
 export interface LLMRecommendation {
   priority: "high" | "medium" | "low";
   target_kpi_name: string;
-  target_type: "prompt" | "script_step" | "agent_config";
+  target_type: "prompt" | "agent_config";
   action: string;
   suggested_change: string;
   transcript_timestamp: string;
@@ -133,12 +141,14 @@ export interface LLMRecommendation {
 }
 
 export interface LLMUseAction {
-  reason: string;
+  what_to_change: string;
+  why: string;
   transcript_timestamp: string;
   action_required: "human_followup" | "script_retraining";
 }
 
 export interface AnalysisResult {
+  ai_summary: string | null;
   kpi_scores: KpiScore[];
   overall_score: number;
   recommendations: LLMRecommendation[];

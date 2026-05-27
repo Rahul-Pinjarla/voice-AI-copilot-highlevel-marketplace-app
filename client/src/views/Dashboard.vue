@@ -102,6 +102,7 @@
             <div class="agent-avatar">{{ agent.name.charAt(0).toUpperCase() }}</div>
             <div class="agent-info">
               <div class="agent-name">
+                <span :class="['agent-active-dot', agent.active ? 'dot-on' : 'dot-off']" :title="agent.active ? 'Analysis on' : 'Analysis paused'" />
                 {{ agent.name }}
                 <span v-if="!agent.configured" class="agent-setup-tag">SETUP NEEDED</span>
               </div>
@@ -110,6 +111,11 @@
                 {{ agentStatus(agent) }}
               </div>
             </div>
+            <div class="agent-last-call" v-if="agent.last_call_score !== null">
+              <span class="last-call-score" :style="{ color: healthColor(agent.last_call_score) }">{{ healthScore(agent.last_call_score) }}</span>
+              <span class="last-call-label">LAST CALL</span>
+            </div>
+            <div class="agent-last-call agent-last-call--empty" v-else />
             <div class="agent-health" :style="{ color: healthColor(agent.pass_rate) }">
               <span class="health-score">{{ healthScore(agent.pass_rate) }}</span>
               <span class="health-label">HEALTH</span>
@@ -126,54 +132,79 @@
         </div>
       </section>
 
-      <!-- ── Action Items inbox ── -->
-      <section v-if="humanFollowupActions.length" class="use-actions-section">
+      <!-- ── Pending Items ── -->
+      <section v-if="humanFollowupActions.length || pendingRecs.length" class="pending-section">
         <div class="section-label">
-          Action Items Inbox
-          <span class="section-label-hint">{{ humanFollowupActions.length }} pending</span>
-          <div class="section-label-right">
-            <router-link to="/dashboard" class="btn btn-ghost btn-sm">
-              View all
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </router-link>
-          </div>
+          Pending Items
+          <span class="section-label-hint">{{ humanFollowupActions.length + pendingRecs.length }} total</span>
         </div>
-        <div class="use-actions-list">
-          <div v-for="action in humanFollowupActions" :key="action.id" class="action-card">
+        <div class="pending-tabs">
+          <button :class="['pending-tab', pendingActiveTab === 'actions' ? 'pending-tab--active' : '']" @click="pendingActiveTab = 'actions'">
+            Action Items
+            <span v-if="humanFollowupActions.length" class="pending-tab-badge">{{ humanFollowupActions.length }}</span>
+          </button>
+          <button :class="['pending-tab', pendingActiveTab === 'recs' ? 'pending-tab--active' : '']" @click="pendingActiveTab = 'recs'">
+            Recommendations
+            <span v-if="pendingRecs.length" class="pending-tab-badge">{{ pendingRecs.length }}</span>
+          </button>
+        </div>
+
+        <!-- Action Items tab -->
+        <div v-if="pendingActiveTab === 'actions'" class="pending-list">
+          <div v-if="!humanFollowupActions.length" class="pending-empty">No pending action items</div>
+          <ActionItemCard
+            v-for="action in humanFollowupActions"
+            :key="action.id"
+            :action="action"
+            :agent-name="action.agent_name"
+            :agent-version="action.agent_version"
+            :show-open-agent="true"
+            :show-open-call="true"
+            @handle="handleAction(action.id)"
+            @dismiss="dismissAction(action.id)"
+            @open-agent="router.push(`/agents/${action.agent_id}`)"
+            @open-call="router.push(`/calls/${action.call_id}`)"
+          />
+        </div>
+
+        <!-- Recommendations tab -->
+        <div v-else class="pending-list">
+          <div v-if="!pendingRecs.length" class="pending-empty">No pending recommendations</div>
+          <div v-for="rec in pendingRecs" :key="rec.id" class="action-card">
             <div class="action-head">
-              <span class="pill pill-amber">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {{ action.action_required === 'human_followup' ? 'needs human' : 'needs retraining' }}
+              <span :class="['pill', rec.priority === 'high' ? 'pill-red' : rec.priority === 'medium' ? 'pill-amber' : '']">
+                {{ rec.priority }}
               </span>
               <span class="pill">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
-                {{ action.agent_name }}
+                {{ rec.agent_name }}
               </span>
-              <span class="action-time">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                {{ action.transcript_timestamp ?? 'today' }}
-              </span>
+              <span v-if="rec.agent_version != null" class="pill pill-version">v{{ rec.agent_version }}</span>
+              <span class="pill pill-muted-dim">{{ rec.target_kpi_name.replace(/_/g, ' ') }}</span>
             </div>
-            <div class="action-body">{{ action.reason }}</div>
+            <div class="action-body">{{ rec.action }}</div>
+            <div v-if="rec.suggested_change" class="action-why">
+              <span class="action-why-label">Change</span>{{ rec.suggested_change }}
+            </div>
             <hr class="divider" />
             <div class="action-foot">
               <div class="action-foot-left">
-                <button class="btn btn-sm" @click="handleAction(action.id)">
+                <button class="btn btn-sm" @click="applyRec(rec.id)">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  Mark done
+                  Apply
                 </button>
-                <button class="btn btn-ghost btn-sm" @click="dismissAction(action.id)">
+                <button class="btn btn-ghost btn-sm" @click="dismissRec(rec.id)">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  Ignore
+                  Dismiss
                 </button>
               </div>
               <div class="action-foot-right">
-                <button class="linkish" @click="router.push(`/agents/${action.agent_id}`)">
+                <button class="linkish" @click="router.push(`/agents/${rec.agent_id}`)">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
                   Open agent
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </button>
-                <button class="linkish" @click="router.push(`/calls/${action.call_id}`)">
+                <button class="linkish" @click="router.push(`/calls/${rec.call_id}`)">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                   Open call
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -193,9 +224,13 @@ import { useRouter } from "vue-router";
 import type { DashboardAgent } from "@/lib/api";
 import { api } from "@/lib/api";
 import { useDashboard } from "@/composables/useDashboard";
+import { useToast } from "@/composables/useToast";
+import ActionItemCard from "@/components/ActionItemCard.vue";
 
 const router = useRouter();
-const { agents, useActions, loading, load } = useDashboard();
+const { agents, useActions, pendingRecs, loading, load } = useDashboard();
+const { show: showToast } = useToast();
+const pendingActiveTab = ref<"actions" | "recs">("actions");
 
 const autoSyncing = ref(false);
 
@@ -211,13 +246,31 @@ onMounted(async () => {
   }
 });
 async function handleAction(id: string) {
-  await api.recommendations.handleUseAction(id);
-  await load(true);
+  try {
+    await api.recommendations.handleUseAction(id);
+    await load(true);
+  } catch (err) { showToast(err instanceof Error ? err.message : "Failed to mark action done"); }
 }
 
 async function dismissAction(id: string) {
-  await api.recommendations.dismissUseAction(id);
-  await load(true);
+  try {
+    await api.recommendations.dismissUseAction(id);
+    await load(true);
+  } catch (err) { showToast(err instanceof Error ? err.message : "Failed to dismiss action"); }
+}
+
+async function applyRec(id: string) {
+  try {
+    await api.recommendations.apply(id);
+    await load(true);
+  } catch (err) { showToast(err instanceof Error ? err.message : "Failed to apply recommendation"); }
+}
+
+async function dismissRec(id: string) {
+  try {
+    await api.recommendations.dismiss(id);
+    await load(true);
+  } catch (err) { showToast(err instanceof Error ? err.message : "Failed to dismiss recommendation"); }
 }
 
 // ── Computed ──────────────────────────────────────────────────────────────────
@@ -263,11 +316,11 @@ function healthScore(passRate: number | null): string {
 }
 
 function agentStatus(agent: DashboardAgent): string {
-  if (!agent.configured) return "configure KPIs to start analysis";
-  if (agent.top_failing_kpi) return `KPI failing → "${agent.top_failing_kpi.replace(/_/g, " ")}"`;
+  if (!agent.configured) return "configure Goals to start analysis";
+  if (agent.top_failing_kpi) return `Goal failing → "${agent.top_failing_kpi.replace(/_/g, " ")}"`;
   if (agent.pass_rate === null) return "no analysis yet";
   if (agent.active_recs > 0) return `${agent.active_recs} active recommendation${agent.active_recs > 1 ? "s" : ""}`;
-  return "steady · all KPIs passing";
+  return "steady · all Goals passing";
 }
 </script>
 
@@ -347,7 +400,7 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
 
 .agent-row {
   display: grid;
-  grid-template-columns: 36px 1fr 76px 80px auto;
+  grid-template-columns: 36px 1fr 76px 76px 80px auto;
   gap: 14px;
   padding: 14px 16px;
   align-items: center;
@@ -370,8 +423,16 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
 
 .agent-info { min-width: 0; }
 .agent-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.agent-active-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-on { background: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,0.2); }
+.dot-off { background: var(--ink-4, #c4c4c4); }
 .agent-setup-tag { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--ink-3); border: 1px solid var(--border); padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
 .agent-status { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 4px; }
+
+.agent-last-call { display: flex; flex-direction: column; align-items: center; }
+.agent-last-call--empty { visibility: hidden; }
+.last-call-score { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.last-call-label { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; color: var(--ink-3); margin-top: 2px; text-transform: uppercase; white-space: nowrap; }
 
 .agent-health { display: flex; flex-direction: column; align-items: center; }
 .health-score { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
@@ -380,23 +441,49 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
 .agent-calls { font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
 .open-btn { flex-shrink: 0; }
 
-/* ── Use Actions ── */
-.use-actions-section {}
-.use-actions-list { display: flex; flex-direction: column; gap: 10px; }
-
-.action-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* ── Pending Items ── */
+.pending-section {}
+.pending-tabs {
+  display: flex; gap: 0; border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  background: var(--surface-2); margin-bottom: 12px;
+  width: fit-content;
 }
+.pending-tab {
+  background: transparent; border: 0;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  color: var(--ink-3); padding: 7px 18px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: background 0.1s, color 0.1s;
+}
+.pending-tab:hover { color: var(--ink-1); }
+.pending-tab--active {
+  background: var(--surface); color: var(--ink-1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+.pending-tab-badge {
+  font-size: 11px; font-weight: 600;
+  background: var(--surface-3); color: var(--ink-2);
+  padding: 1px 6px; border-radius: 99px;
+  border: 1px solid var(--border);
+}
+.pending-tab--active .pending-tab-badge {
+  background: var(--accent-soft, #e0edff); color: var(--blue);
+  border-color: var(--blue-bg);
+}
+.pending-list { display: flex; flex-direction: column; gap: 10px; }
+.pending-empty { font-size: 13px; color: var(--ink-3); padding: 20px 0; text-align: center; }
 
-.action-head { display: flex; align-items: center; gap: 8px; }
-.action-time { margin-left: auto; font-size: 12px; color: var(--ink-3); font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 4px; }
-.action-body { font-size: 13.5px; line-height: 1.5; color: var(--ink-1); font-weight: 500; }
+/* ── Pending rec cards (recs tab) ── */
+.action-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.action-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.action-body { font-size: 13.5px; line-height: 1.5; color: var(--ink-1); font-weight: 600; }
+.action-why { font-size: 12.5px; color: var(--ink-3); line-height: 1.5; display: flex; align-items: baseline; gap: 6px; }
+.action-why-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-4); flex-shrink: 0; }
 .divider { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .action-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .action-foot-left { display: flex; gap: 4px; }
@@ -413,6 +500,9 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
   white-space: nowrap;
 }
 .pill-amber { background: var(--amber-bg); color: var(--amber); border-color: rgba(217,119,6,0.18); }
+.pill-red { background: var(--red-bg); color: var(--red); border-color: rgba(220,38,38,0.18); }
+.pill-version { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; background: #ede9fe; color: #5b21b6; border-color: rgba(109,40,217,0.18); }
+.pill-muted-dim { font-size: 11px; color: var(--ink-3); text-transform: capitalize; }
 
 .linkish {
   background: transparent; border: 0;
@@ -424,7 +514,7 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
 
 @media (max-width: 900px) {
   .snapshot-grid { grid-template-columns: repeat(2, 1fr); }
-  .agent-row { grid-template-columns: 36px 1fr 60px auto; }
-  .agent-calls { display: none; }
+  .agent-row { grid-template-columns: 36px 1fr 76px auto; }
+  .agent-last-call, .agent-calls { display: none; }
 }
 </style>

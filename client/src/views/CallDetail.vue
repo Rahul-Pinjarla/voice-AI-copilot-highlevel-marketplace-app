@@ -37,6 +37,29 @@
 
       <!-- ── Two-column: Transcript + KPI Checks ── -->
       <div class="pane">
+        <!-- AI Summary (post-analysis) -->
+        <div v-if="call.analysis?.ai_summary" class="call-summary-card card">
+          <div class="call-summary-head">
+            <div class="panel-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              AI Summary
+            </div>
+          </div>
+          <p class="call-summary-text">{{ call.analysis.ai_summary }}</p>
+        </div>
+
+        <!-- GHL call summary (shown when not yet analysed) -->
+        <div v-else-if="call.analysis_status === 'pending' && call.summary" class="call-summary-card card">
+          <div class="call-summary-head">
+            <div class="panel-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Call Summary
+            </div>
+            <span class="summary-source-tag">from GHL</span>
+          </div>
+          <p class="call-summary-text">{{ call.summary }}</p>
+        </div>
+
         <div class="call-layout">
           <!-- Transcript -->
           <div class="transcript card">
@@ -81,12 +104,12 @@
             </div>
           </div>
 
-          <!-- KPI Checks -->
-          <div class="kpi-checks">
+          <!-- KPI Checks (hidden until analysed) -->
+          <div v-if="call.analysis_status !== 'pending'" class="kpi-checks">
             <div class="panel-header-row">
               <div class="panel-title">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="18" x2="3.01" y2="18"/><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
-                KPI Checks
+                Goal Checks
               </div>
               <div v-if="call.analysis" class="kpi-summary">
                 <span v-if="failCount" class="kpi-pill kpi-pill-fail">
@@ -136,93 +159,50 @@
                 Copy prompt with all changes
               </button>
             </div>
-            <div v-for="rec in promptRecs" :key="rec.id" :class="['rec-card', rec.status !== 'pending' && 'rec-card--resolved']">
-              <div class="rec-head">
-                <span :class="['rec-priority-pill', `rec-priority-${rec.priority}`]">{{ rec.priority.toUpperCase() }}</span>
-                <span class="rec-kpi">{{ titleCase(rec.target_kpi_name) }}</span>
-                <span v-if="rec.status !== 'pending'" :class="['pill', rec.status === 'applied' ? 'pill-green' : 'pill-muted']">{{ rec.status }}</span>
-              </div>
-              <div class="rec-action">{{ rec.action }}</div>
-              <div v-if="rec.suggested_change" class="rec-body">{{ rec.suggested_change }}</div>
-              <div v-if="rec.agent_field && rec.current_value" class="rec-diff">
-                <div class="diff-label">{{ rec.agent_field }}</div>
-                <div class="diff-row">
-                  <div class="diff-before">{{ rec.current_value }}</div>
-                  <div class="diff-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
-                  <div class="diff-after">{{ rec.suggested_value }}</div>
-                </div>
-              </div>
-              <div class="rec-foot">
-                <template v-if="rec.status === 'pending'">
-                  <button class="btn btn-primary btn-sm" @click="applyRec(rec.id)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    Apply
-                  </button>
-                  <button class="btn btn-ghost btn-sm" @click="dismissRec(rec.id)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    Dismiss
-                  </button>
-                </template>
-                <button v-if="agentPrompt" class="btn btn-sm" @click="copyUpdatedPrompt(rec)">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  Copy updated prompt
-                </button>
-              </div>
-            </div>
+            <RecommendationCard
+              v-for="rec in promptRecs"
+              :key="rec.id"
+              :rec="rec"
+              :show-copy-prompt="!!agentPrompt"
+              @apply="applyRec(rec.id)"
+              @dismiss="dismissRec(rec.id)"
+              @copy-prompt="copyUpdatedPrompt(rec)"
+            />
           </template>
 
           <template v-if="kbRecs.length">
             <div class="rec-category">Knowledge Base Changes</div>
-            <div v-for="rec in kbRecs" :key="rec.id" :class="['rec-card', rec.status !== 'pending' && 'rec-card--resolved']">
-              <div class="rec-head">
-                <span :class="['rec-priority-pill', `rec-priority-${rec.priority}`]">{{ rec.priority.toUpperCase() }}</span>
-                <span class="rec-kpi">{{ titleCase(rec.target_kpi_name) }}</span>
-                <span v-if="rec.status !== 'pending'" :class="['pill', rec.status === 'applied' ? 'pill-green' : 'pill-muted']">{{ rec.status }}</span>
-              </div>
-              <div class="rec-action">{{ rec.action }}</div>
-              <div v-if="rec.suggested_change" class="rec-body">{{ rec.suggested_change }}</div>
-              <div v-if="rec.status === 'pending'" class="rec-foot">
-                <button class="btn btn-primary btn-sm" @click="applyRec(rec.id)">Apply</button>
-                <button class="btn btn-ghost btn-sm" @click="dismissRec(rec.id)">Dismiss</button>
-              </div>
-            </div>
+            <RecommendationCard
+              v-for="rec in kbRecs"
+              :key="rec.id"
+              :rec="rec"
+              @apply="applyRec(rec.id)"
+              @dismiss="dismissRec(rec.id)"
+            />
           </template>
 
           <template v-if="otherRecs.length">
             <div class="rec-category">Other Changes</div>
-            <div v-for="rec in otherRecs" :key="rec.id" :class="['rec-card', rec.status !== 'pending' && 'rec-card--resolved']">
-              <div class="rec-head">
-                <span :class="['rec-priority-pill', `rec-priority-${rec.priority}`]">{{ rec.priority.toUpperCase() }}</span>
-                <span class="rec-kpi">{{ titleCase(rec.target_kpi_name) }}</span>
-                <span v-if="rec.status !== 'pending'" :class="['pill', rec.status === 'applied' ? 'pill-green' : 'pill-muted']">{{ rec.status }}</span>
-              </div>
-              <div class="rec-action">{{ rec.action }}</div>
-              <div v-if="rec.suggested_change" class="rec-body">{{ rec.suggested_change }}</div>
-              <div v-if="rec.status === 'pending'" class="rec-foot">
-                <button class="btn btn-primary btn-sm" @click="applyRec(rec.id)">Apply</button>
-                <button class="btn btn-ghost btn-sm" @click="dismissRec(rec.id)">Dismiss</button>
-              </div>
-            </div>
+            <RecommendationCard
+              v-for="rec in otherRecs"
+              :key="rec.id"
+              :rec="rec"
+              @apply="applyRec(rec.id)"
+              @dismiss="dismissRec(rec.id)"
+            />
           </template>
         </section>
 
         <!-- ── Action Items ── -->
         <section v-if="pendingUseActions.length" class="below-section">
           <div class="section-label">Action Items</div>
-          <div v-for="ua in pendingUseActions" :key="ua.id" class="action-card">
-            <div class="action-head">
-              <span :class="['pill', ua.action_required === 'human_followup' ? 'pill-amber' : 'pill-blue']">
-                <span class="ua-dot" />
-                {{ ua.action_required === 'human_followup' ? 'human followup' : 'needs retraining' }}
-              </span>
-              <span v-if="ua.transcript_timestamp" class="ua-ts">@ {{ ua.transcript_timestamp }}</span>
-            </div>
-            <div class="ua-reason">{{ ua.reason }}</div>
-            <div class="ua-foot">
-              <button class="btn btn-secondary btn-sm" @click="markHandled(ua.id)">Mark done</button>
-              <button class="btn btn-ghost btn-sm" @click="dismissUseAction(ua.id)">Ignore</button>
-            </div>
-          </div>
+          <ActionItemCard
+            v-for="ua in pendingUseActions"
+            :key="ua.id"
+            :action="ua"
+            @handle="markHandled(ua.id)"
+            @dismiss="dismissUseAction(ua.id)"
+          />
         </section>
       </div>
     </template>
@@ -234,10 +214,15 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import type { CallDetail, KpiScore, Recommendation } from "@/lib/api";
 import { api } from "@/lib/api";
+import { useToast } from "@/composables/useToast";
+import { titleCase } from "@/lib/utils";
+import RecommendationCard from "@/components/RecommendationCard.vue";
+import ActionItemCard from "@/components/ActionItemCard.vue";
 
 const route = useRoute();
 const callId = route.params.id as string;
 const backLink = computed(() => history.state?.back ?? "/dashboard");
+const { show: showToast } = useToast();
 
 const loading = ref(true);
 const call = ref<CallDetail | null>(null);
@@ -343,25 +328,42 @@ const pendingUseActions = computed(() => call.value?.use_actions?.filter((u) => 
 const callerLabel = computed(() => call.value?.caller_number ?? "Unknown call");
 const showRetry = computed(() => {
   if (!call.value) return false;
+  if (call.value.analysis_status === "pending") return true;
   if (call.value.analysis_status === "failed") return true;
   if (call.value.analysis_status === "running" && Date.now() - loadedAt.value > 60000) return true;
   return false;
 });
 
 // ── Actions ───────────────────────────────────────────────────────────────────
-async function applyRec(id: string) { await api.recommendations.apply(id); call.value = await api.calls.get(callId); }
-async function dismissRec(id: string) { await api.recommendations.dismiss(id); call.value = await api.calls.get(callId); }
-async function markHandled(id: string) { await api.recommendations.handleUseAction(id); call.value = await api.calls.get(callId); }
-async function dismissUseAction(id: string) { await api.recommendations.dismissUseAction(id); call.value = await api.calls.get(callId); }
+async function applyRec(id: string) {
+  try { await api.recommendations.apply(id); call.value = await api.calls.get(callId); }
+  catch (err) { showToast(err instanceof Error ? err.message : "Failed to apply recommendation"); }
+}
+async function dismissRec(id: string) {
+  try { await api.recommendations.dismiss(id); call.value = await api.calls.get(callId); }
+  catch (err) { showToast(err instanceof Error ? err.message : "Failed to dismiss recommendation"); }
+}
+async function markHandled(id: string) {
+  try { await api.recommendations.handleUseAction(id); call.value = await api.calls.get(callId); }
+  catch (err) { showToast(err instanceof Error ? err.message : "Failed to mark action handled"); }
+}
+async function dismissUseAction(id: string) {
+  try { await api.recommendations.dismissUseAction(id); call.value = await api.calls.get(callId); }
+  catch (err) { showToast(err instanceof Error ? err.message : "Failed to dismiss action"); }
+}
 async function retryAnalysis() {
   retrying.value = true;
-  await api.calls.analyze(callId);
-  call.value = await api.calls.get(callId);
-  retrying.value = false;
+  try {
+    await api.calls.analyze(callId);
+    call.value = await api.calls.get(callId);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : "Failed to retry analysis");
+  } finally {
+    retrying.value = false;
+  }
 }
 
 // ── Format helpers ────────────────────────────────────────────────────────────
-function titleCase(k: string) { return k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
 function fmtDuration(secs: number | null | undefined) {
   if (!secs) return "—";
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
@@ -372,7 +374,7 @@ function statusBadge(s: string) {
   return map[s] ?? "badge badge-pending";
 }
 function statusMsg(s: string) {
-  const map: Record<string, string> = { pending: "Analysis queued", running: "Analysis in progress…", failed: "Analysis failed", skipped: "No transcript available" };
+  const map: Record<string, string> = { pending: "Not yet analysed — agent was paused when this call came in", running: "Analysis in progress…", failed: "Analysis failed", skipped: "No transcript available" };
   return map[s] ?? s;
 }
 </script>
@@ -462,43 +464,6 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px
 .rec-category-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 2px; }
 .rec-category { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
 
-.rec-card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 10px; padding: 16px 18px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-.rec-card--resolved { opacity: 0.6; }
-.rec-head { display: flex; align-items: center; gap: 10px; }
-.rec-priority-pill { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 9px; border-radius: 99px; }
-.rec-priority-high { background: var(--red-bg); color: var(--red); border: 1px solid rgba(220,38,38,0.18); }
-.rec-priority-medium { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(217,119,6,0.18); }
-.rec-priority-low { background: var(--surface-3); color: var(--ink-3); border: 1px solid var(--border); }
-.rec-kpi { font-weight: 600; font-size: 13.5px; flex: 1; }
-.rec-action { font-weight: 600; font-size: 14px; line-height: 1.5; color: var(--ink-1); }
-.rec-body { font-size: 13px; line-height: 1.6; color: var(--ink-2); background: var(--surface-2); padding: 12px 14px; border-radius: 8px; }
-
-.rec-diff { display: flex; flex-direction: column; gap: 6px; }
-.diff-label { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-3); }
-.diff-row { display: grid; grid-template-columns: 1fr 24px 1fr; gap: 10px; align-items: center; }
-.diff-before { padding: 9px 11px; border-radius: 8px; font-size: 12.5px; line-height: 1.55; background: var(--red-soft); color: #991b1b; border: 1px solid rgba(220,38,38,0.18); }
-.diff-after { padding: 9px 11px; border-radius: 8px; font-size: 12.5px; line-height: 1.55; background: var(--green-soft); color: #14532d; border: 1px solid rgba(22,163,74,0.18); }
-.diff-arrow { display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
-.rec-foot { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* Pills */
-.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 500; padding: 2px 9px; border-radius: 99px; background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--border); white-space: nowrap; }
-.pill-green { background: var(--green-bg); color: #047857; border-color: rgba(22,163,74,0.18); }
-.pill-muted { background: var(--surface-2); color: var(--ink-3); border-color: var(--border); }
-.pill-amber { background: var(--amber-bg); color: var(--amber); border-color: rgba(217,119,6,0.18); }
-.pill-blue { background: var(--blue-bg); color: var(--blue); border-color: rgba(37,99,235,0.18); }
-
-/* Action cards */
-.action-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.action-head { display: flex; align-items: center; gap: 8px; }
-.ua-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.ua-ts { font-size: 12px; color: var(--ink-3); margin-left: auto; }
-.ua-reason { font-size: 13px; font-weight: 500; line-height: 1.4; }
-.ua-foot { display: flex; gap: 6px; }
 
 /* Global */
 .empty-state { text-align: center; padding: 48px 24px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
@@ -516,4 +481,10 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px
   .call-layout { grid-template-columns: 1fr; }
   .diff-row { grid-template-columns: 1fr 20px 1fr; }
 }
+
+/* ── AI Summary ── */
+.call-summary-card { padding: 16px 20px; }
+.call-summary-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.call-summary-text { font-size: 14px; color: var(--color-text); line-height: 1.65; margin: 0; }
+.summary-source-tag { font-size: 11px; font-weight: 500; color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
 </style>

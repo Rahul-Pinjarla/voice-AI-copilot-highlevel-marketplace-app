@@ -81,6 +81,7 @@ router.post("/verify", async (req, res) => {
 
   try {
     const data = decryptSSOData(encrypted);
+    console.log(`[sso] payload keys: ${Object.keys(data).join(", ")} | locationId=${data.activeLocation ?? data.locationId} companyId=${data.companyId ?? "(none)"}`);
     const locationId = data.activeLocation ?? data.locationId;
 
     if (!locationId) {
@@ -98,8 +99,10 @@ router.post("/verify", async (req, res) => {
     let isNewInstall = false;
     if (!installation) {
       const companyId = data.companyId as string | undefined;
+      console.log(`[sso] No location install for ${locationId}; companyId in payload: ${companyId ?? "(none)"}`);
       if (companyId) {
         const companyInstall = getInstallation(db, companyId);
+        console.log(`[sso] Company install lookup (${companyId}): ${companyInstall ? "found" : "not found"}`);
         if (companyInstall) {
           try {
             const locTokens = await getLocationToken(companyInstall.access_token, companyId, locationId);
@@ -129,6 +132,7 @@ router.post("/verify", async (req, res) => {
     }
 
     if (!installation) {
+      console.error(`[sso] NOT_INSTALLED: locationId=${locationId} companyId=${data.companyId ?? "(none)"} — no install record found`);
       res.status(403).json({ error: { code: "NOT_INSTALLED", message: "App not installed for this location. Please install from the marketplace." } });
       return;
     }

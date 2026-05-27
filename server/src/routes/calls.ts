@@ -4,7 +4,6 @@ import {
   getAnalysisForCall,
   getCall,
   getCallAgentSnapshot,
-  getCallsByAgent,
   getRecommendationsForAnalysis,
   getUseActionsForAnalysis,
 } from "../db/queries";
@@ -14,20 +13,6 @@ import { ApiError } from "../types";
 
 const router = Router();
 router.use(requireSession);
-
-// List calls for an agent
-router.get("/:agentId/calls", (req, res, next) => {
-  try {
-    const db = getDb();
-    const locationId = req.session.locationId!;
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const versionId = typeof req.query.version === "string" ? req.query.version : undefined;
-    const calls = getCallsByAgent(db, req.params.agentId, locationId, versionId, limit);
-    res.json(calls);
-  } catch (err) {
-    next(err);
-  }
-});
 
 // Get single call with full analysis
 router.get("/:id", (req, res, next) => {
@@ -55,6 +40,7 @@ router.get("/:id", (req, res, next) => {
             error: analysis.error,
             created_at: analysis.created_at,
             combined_prompt: analysis.combined_prompt ?? null,
+            ai_summary: analysis.ai_summary ?? null,
           }
         : null,
       recommendations,

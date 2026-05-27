@@ -17,8 +17,12 @@ export const webhookHandlers: Record<string, Handler> = {
   },
 
   async AppUninstalled(payload, db) {
+    console.log("[webhook] AppUninstalled raw payload:", JSON.stringify(payload, null, 2));
     const locationId = (payload.locationId ?? payload.location_id) as string | undefined;
-    if (!locationId) return;
+    if (!locationId) {
+      console.warn("[webhook] AppUninstalled: no locationId found in payload");
+      return;
+    }
     softDeleteInstallation(db, locationId);
     console.log(`[webhook] App uninstalled for location: ${locationId}`);
   },
@@ -56,8 +60,11 @@ async function handleCallEvent(
   const agentId = (payload.agentId ?? payload.agent_id ?? payload.botId) as string | undefined;
   const agentName = (payload.agentName ?? payload.agent_name ?? payload.botName) as string | undefined;
 
+  const eventType = (payload.type ?? payload.event ?? payload.eventType ?? "unknown") as string;
+  console.log(`[webhook] Call event: type=${eventType} callId=${callId ?? "(none)"} agentId=${agentId ?? "(none)"} location=${locationId ?? "(none)"}`);
+
   if (!locationId || !callId) {
-    console.warn("[webhook] Call event missing locationId or callId:", payload);
+    console.warn("[webhook] Call event missing locationId or callId:", JSON.stringify(payload));
     return;
   }
 
@@ -119,6 +126,8 @@ async function handleCallEvent(
     return;
   }
 
+  console.log(`[webhook] Call received: ghl_id=${callId} agent="${agent.name}" location=${locationId} transcript=${transcript ? `${transcript.length} chars` : "none"}`);
+
   const row = db
     .prepare("SELECT id FROM calls WHERE location_id = ? AND ghl_call_id = ?")
     .get(locationId, callId) as { id: string } | undefined;
@@ -130,6 +139,11 @@ async function handleCallEvent(
         call_id: row.id,
         snapshot_json: JSON.stringify(ghlAgentSettings),
       });
+    }
+
+    if (!agent.active) {
+      console.log(`[webhook] Agent ${agent.id} is inactive — call stored, analysis skipped`);
+      return;
     }
 
     setImmediate(() => {

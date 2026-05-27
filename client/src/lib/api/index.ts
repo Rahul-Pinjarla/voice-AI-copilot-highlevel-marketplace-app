@@ -41,7 +41,7 @@ export const api = {
 
   dashboard: {
     get: () =>
-      request<{ agents: DashboardAgent[]; use_actions: UseActionWithContext[] }>("/api/agents/dashboard"),
+      request<{ agents: DashboardAgent[]; use_actions: UseActionWithContext[]; pending_recs: PendingRecWithContext[] }>("/api/agents/dashboard"),
   },
 
   agents: {
@@ -63,7 +63,8 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    kpiStats: (id: string) => request<KpiStat[]>(`/api/agents/${id}/kpi-stats`),
+    kpiStats: (id: string, versionId?: string) =>
+      request<KpiStat[]>(`/api/agents/${id}/kpi-stats${versionId ? `?version=${versionId}` : ""}`),
     versions: (id: string) => request<AgentVersion[]>(`/api/agents/${id}/versions`),
     settings: (id: string) => request<GhlAgentSettings>(`/api/agents/${id}/settings`),
     analyzeAll: (id: string) =>
@@ -71,6 +72,33 @@ export const api = {
     recommendations: (id: string, versionId?: string) =>
       request<AgentRecommendation[]>(`/api/agents/${id}/recommendations${versionId ? `?version=${versionId}` : ""}`),
     useActions: (id: string) => request<AgentUseAction[]>(`/api/agents/${id}/use-actions`),
+    setMode: (id: string, mode: "manual" | "auto") =>
+      request<{ ok: boolean; mode: string }>(`/api/agents/${id}/mode`, {
+        method: "PATCH",
+        body: JSON.stringify({ mode }),
+      }),
+    setActive: (id: string, active: boolean) =>
+      request<{ ok: boolean; active: boolean }>(`/api/agents/${id}/active`, {
+        method: "PATCH",
+        body: JSON.stringify({ active }),
+      }),
+    getSuccessCriteria: (id: string) =>
+      request<{ success_criteria: string }>(`/api/agents/${id}/success-criteria`),
+    setSuccessCriteria: (id: string, success_criteria: string) =>
+      request<{ ok: boolean }>(`/api/agents/${id}/success-criteria`, {
+        method: "PATCH",
+        body: JSON.stringify({ success_criteria }),
+      }),
+    suggestKpisForCriteria: (id: string, criteria: string) =>
+      request<KpiSuggestion[]>(`/api/agents/${id}/suggest-kpis-for-criteria`, {
+        method: "POST",
+        body: JSON.stringify({ criteria }),
+      }),
+    applyRecommendation: (agentId: string, recId: string) =>
+      request<{ ok: boolean; appliedToGhl: boolean; actionItemCreated?: boolean }>(
+        `/api/agents/${agentId}/apply-recommendation/${recId}`,
+        { method: "POST" },
+      ),
   },
 
   calls: {
@@ -106,29 +134,53 @@ export interface DashboardAgent {
   id: string;
   name: string;
   configured: number;
+  active: boolean;
   calls_today: number;
   pass_rate: number | null;
+  last_call_score: number | null;
   top_failing_kpi: string | null;
   active_recs: number;
+}
+
+export interface PendingRecWithContext {
+  id: string;
+  target_kpi_name: string;
+  action: string;
+  suggested_change: string | null;
+  target_type: string;
+  priority: string;
+  auto_applied: boolean;
+  call_id: string;
+  agent_id: string;
+  agent_name: string;
+  agent_version: number | null;
+  version_created_at: number | null;
 }
 
 export interface UseActionWithContext {
   id: string;
   reason: string;
+  what_to_change: string | null;
+  why: string | null;
   transcript_timestamp: string | null;
   action_required: string;
   status: string;
   call_id: string;
   agent_id: string;
   agent_name: string;
+  agent_version: number | null;
+  version_created_at: number | null;
 }
 
 export interface Agent {
   id: string;
   name: string;
   configured: number;
+  active: boolean;
   ghl_agent_id: string | null;
   system_prompt: string | null;
+  mode: "manual" | "auto";
+  success_criteria: string;
 }
 
 export interface KpiInput {
@@ -154,6 +206,7 @@ export interface KpiSuggestion {
 export interface AgentWithKpis extends Agent {
   kpis: KpiConfig[];
   kpi_version: number;
+  kpi_suggestions: KpiSuggestion[];
 }
 
 export interface CallWithScore {
@@ -213,6 +266,7 @@ export interface Recommendation {
   target_type: string;
   priority: string;
   status: string;
+  auto_applied: boolean;
   applied_at: number | null;
   transcript_timestamp: string | null;
   agent_field: string | null;
@@ -224,6 +278,8 @@ export interface Recommendation {
 export interface UseAction {
   id: string;
   reason: string;
+  what_to_change: string | null;
+  why: string | null;
   transcript_timestamp: string | null;
   action_required: string;
   status: string;
@@ -268,6 +324,8 @@ export interface AgentSnapshot {
 export interface AgentUseAction {
   id: string;
   reason: string;
+  what_to_change: string | null;
+  why: string | null;
   transcript_timestamp: string | null;
   action_required: string;
   status: string;
@@ -285,6 +343,7 @@ export interface AgentRecommendation {
   target_type: string;
   priority: string;
   status: string;
+  auto_applied: boolean;
   agent_field: string | null;
   current_value: string | null;
   suggested_value: string | null;
@@ -292,6 +351,8 @@ export interface AgentRecommendation {
   call_id: string;
   updated_prompt: string | null;
   combined_prompt: string | null;
+  agent_version: number | null;
+  version_created_at: number | null;
 }
 
 export interface CallDetail extends CallWithScore {
@@ -303,6 +364,7 @@ export interface CallDetail extends CallWithScore {
     error: string | null;
     created_at: number;
     combined_prompt: string | null;
+    ai_summary: string | null;
   } | null;
   recommendations: Recommendation[];
   use_actions: UseAction[];

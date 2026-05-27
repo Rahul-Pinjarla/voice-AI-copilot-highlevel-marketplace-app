@@ -5,6 +5,12 @@ import { expiresAt, refreshToken } from "./oauth";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 10_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 async function ghlFetch(
   db: Database.Database,
   locationId: string,
@@ -25,7 +31,7 @@ async function ghlFetch(
   }
 
   const inst = getInstallation(db, locationId)!;
-  const res = await fetch(`${GHL_API_BASE}${path}`, {
+  const res = await fetchWithTimeout(`${GHL_API_BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${inst.access_token}`,
@@ -105,6 +111,71 @@ export async function fetchVoiceAiAgents(
   }
   const data = (await res.json()) as { agents?: GhlAgent[] };
   return data.agents ?? [];
+}
+
+// Fields GHL PUT /voice-ai/agents/:id explicitly rejects (422) — confirmed via probe 2026-05-25
+const GHL_AGENT_PUT_STRIP = new Set([
+  "id",
+  "toolCallStrictMode",
+  "actions",
+  "traceId",
+  "inboundNumbers",      // managed via separate endpoint
+  "callEndWorkflowIds",  // managed via separate endpoint
+  "createdAt",
+  "updatedAt",
+  "status",
+]);
+
+// Fields GHL accepts in PUT — confirmed via probe 2026-05-25 on "AI Sells Itself" agent
+export const GHL_AGENT_UPDATABLE_FIELDS = new Set([
+  "agentName",
+  "businessName",
+  "welcomeMessage",
+  "agentPrompt",
+  "voiceId",
+  "responsiveness",
+  "maxCallDuration",
+  "sendUserIdleReminders",
+  "reminderAfterIdleTimeSeconds",
+  "sendPostCallNotificationTo",
+  "agentWorkingHours",
+  "timezone",
+  "isAgentAsBackupDisabled",
+  "translation",
+  "prompts",
+]);
+
+export async function updateGhlAgent(
+  db: Database.Database,
+  locationId: string,
+  ghlAgentId: string,
+  updates: Partial<Record<string, unknown>>,
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  // Fetch current state so we can build a complete PUT body
+  const current = await fetchAgentById(db, locationId, ghlAgentId);
+  if (!current) return { ok: false, error: "Could not fetch current agent" };
+
+  // Build body: start from current state, strip known-bad fields, merge updates
+  const body: Record<string, unknown> = { locationId };
+  for (const [k, v] of Object.entries(current)) {
+    if (!GHL_AGENT_PUT_STRIP.has(k) && k !== "locationId") body[k] = v;
+  }
+  for (const [k, v] of Object.entries(updates)) {
+    if (!GHL_AGENT_PUT_STRIP.has(k)) body[k] = v;
+  }
+
+  const res = await ghlFetch(db, locationId, `/voice-ai/agents/${ghlAgentId}?locationId=${locationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error(`[ghl] updateGhlAgent failed ${res.status}:`, errBody);
+    return { ok: false, status: res.status, error: errBody };
+  }
+  return { ok: true };
 }
 
 export async function fetchCallLogs(

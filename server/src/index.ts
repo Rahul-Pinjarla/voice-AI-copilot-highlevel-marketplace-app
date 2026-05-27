@@ -56,7 +56,6 @@ app.use("/oauth", oauthRouter);
 app.use("/api/sso", ssoRouter);
 app.use("/api/webhooks", webhooksRouter);
 app.use("/api/agents", agentsRouter);
-app.use("/api/agents", callsRouter); // /api/agents/:agentId/calls
 app.use("/api/calls", callsRouter);
 app.use("/api/recommendations", recommendationsRouter);
 app.use("/api/backfill", backfillRouter);
