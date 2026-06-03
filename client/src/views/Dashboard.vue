@@ -30,7 +30,7 @@
               </span>
               <span class="snap-label">total calls</span>
             </div>
-            <div class="snap-num">{{ totalCallsToday }}</div>
+            <div class="snap-num">{{ totalCalls }}</div>
             <div class="snap-sub">across {{ agents.length }} agent{{ agents.length !== 1 ? 's' : '' }}</div>
           </div>
           <div class="snap-card snap-card--accent">
@@ -45,23 +45,23 @@
           </div>
           <div class="snap-card">
             <div class="snap-top">
-              <span class="snap-ico">
+              <span :class="['snap-ico', severityIcoClass(humanFollowupActions.length)]">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
               </span>
               <span class="snap-label">action items</span>
             </div>
-            <div class="snap-num">{{ humanFollowupActions.length }}</div>
+            <div :class="['snap-num', severityNumClass(humanFollowupActions.length)]">{{ humanFollowupActions.length }}</div>
             <div class="snap-sub">{{ humanFollowupActions.length ? 'pending followup' : 'none pending' }}</div>
           </div>
           <div class="snap-card">
             <div class="snap-top">
-              <span class="snap-ico">
+              <span :class="['snap-ico', severityIcoClass(totalActiveRecs)]">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M5 12H2"/><path d="M22 12h-3"/><path d="M6 6l1.5 1.5"/><path d="M16.5 16.5L18 18"/><path d="M6 18l1.5-1.5"/><path d="M16.5 7.5L18 6"/><circle cx="12" cy="12" r="3"/></svg>
               </span>
-              <span class="snap-label">active recs</span>
+              <span class="snap-label">recommendations</span>
             </div>
-            <div class="snap-num">{{ totalActiveRecs }}</div>
-            <div class="snap-sub">across all agents</div>
+            <div :class="['snap-num', severityNumClass(totalActiveRecs)]">{{ totalActiveRecs }}</div>
+            <div class="snap-sub">needs your approval</div>
           </div>
         </div>
       </section>
@@ -122,7 +122,7 @@
             </div>
             <div class="agent-calls">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-              {{ agent.calls_today }} <span style="color:var(--ink-3)">calls</span>
+              {{ agent.total_calls }} <span style="color:var(--ink-3)">calls</span>
             </div>
             <button class="btn btn-secondary btn-sm open-btn" @click.stop="router.push(`/agents/${agent.id}`)">
               Open
@@ -141,11 +141,11 @@
         <div class="pending-tabs">
           <button :class="['pending-tab', pendingActiveTab === 'actions' ? 'pending-tab--active' : '']" @click="pendingActiveTab = 'actions'">
             Action Items
-            <span v-if="humanFollowupActions.length" class="pending-tab-badge">{{ humanFollowupActions.length }}</span>
+            <span v-if="humanFollowupActions.length" :class="['pending-tab-badge', severityBadgeClass(humanFollowupActions.length)]">{{ humanFollowupActions.length }}</span>
           </button>
           <button :class="['pending-tab', pendingActiveTab === 'recs' ? 'pending-tab--active' : '']" @click="pendingActiveTab = 'recs'">
             Recommendations
-            <span v-if="pendingRecs.length" class="pending-tab-badge">{{ pendingRecs.length }}</span>
+            <span v-if="pendingRecs.length" :class="['pending-tab-badge', severityBadgeClass(pendingRecs.length)]">{{ pendingRecs.length }}</span>
           </button>
         </div>
 
@@ -276,7 +276,7 @@ async function dismissRec(id: string) {
 // ── Computed ──────────────────────────────────────────────────────────────────
 const humanFollowupActions = computed(() => useActions.value.filter((ua) => ua.action_required === "human_followup"));
 
-const totalCallsToday = computed(() => agents.value.reduce((s, a) => s + a.calls_today, 0));
+const totalCalls = computed(() => agents.value.reduce((s, a) => s + a.total_calls, 0));
 
 const overallPassRate = computed(() => {
   const withRate = agents.value.filter((a) => a.pass_rate !== null);
@@ -302,6 +302,22 @@ const totalActiveRecs = computed(() => agents.value.reduce((s, a) => s + a.activ
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function pct(n: number) { return `${Math.round(n * 100)}%`; }
+
+function severityIcoClass(count: number): string {
+  if (count >= 10) return 'snap-ico--sev-red';
+  if (count >= 5)  return 'snap-ico--sev-amber';
+  return '';
+}
+function severityNumClass(count: number): string {
+  if (count >= 10) return 'snap-num--sev-red';
+  if (count >= 5)  return 'snap-num--sev-amber';
+  return '';
+}
+function severityBadgeClass(count: number): string {
+  if (count >= 10) return 'pending-tab-badge--sev-red';
+  if (count >= 5)  return 'pending-tab-badge--sev-amber';
+  return '';
+}
 
 function healthColor(passRate: number | null): string {
   if (passRate === null) return "#9ca3af";
@@ -381,6 +397,10 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
   color: var(--ink-2); flex-shrink: 0;
 }
 .snap-ico--red { background: var(--red-bg); color: var(--red); }
+.snap-ico--sev-amber { background: var(--amber-bg); color: var(--amber); }
+.snap-ico--sev-red   { background: var(--red-bg);   color: var(--red); }
+.snap-num--sev-amber { color: var(--amber); }
+.snap-num--sev-red   { color: var(--red); }
 .snap-label { font-size: 12px; color: var(--ink-3); font-weight: 500; }
 .snap-num { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-top: 4px; }
 .snap-num--bad { color: var(--red); }
@@ -471,6 +491,8 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 0
   background: var(--accent-soft, #e0edff); color: var(--blue);
   border-color: var(--blue-bg);
 }
+.pending-tab-badge--sev-amber { background: var(--amber-bg); color: var(--amber); border-color: rgba(217,119,6,0.25); }
+.pending-tab-badge--sev-red   { background: var(--red-bg);   color: var(--red);   border-color: rgba(220,38,38,0.25); }
 .pending-list { display: flex; flex-direction: column; gap: 10px; }
 .pending-empty { font-size: 13px; color: var(--ink-3); padding: 20px 0; text-align: center; }
 

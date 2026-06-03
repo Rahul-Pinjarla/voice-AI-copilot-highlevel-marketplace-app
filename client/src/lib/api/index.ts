@@ -94,6 +94,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ criteria }),
       }),
+    generateCriteria: (id: string, source: "prompt" | "refine", input?: string) =>
+      request<{ criteria: string }>(`/api/agents/${id}/generate-criteria`, {
+        method: "POST",
+        body: JSON.stringify({ source, input }),
+      }),
     applyRecommendation: (agentId: string, recId: string) =>
       request<{ ok: boolean; appliedToGhl: boolean; actionItemCreated?: boolean }>(
         `/api/agents/${agentId}/apply-recommendation/${recId}`,
@@ -135,7 +140,7 @@ export interface DashboardAgent {
   name: string;
   configured: number;
   active: boolean;
-  calls_today: number;
+  total_calls: number;
   pass_rate: number | null;
   last_call_score: number | null;
   top_failing_kpi: string | null;
@@ -273,6 +278,7 @@ export interface Recommendation {
   current_value: string | null;
   suggested_value: string | null;
   updated_prompt: string | null;
+  base_prompt: string | null;
 }
 
 export interface UseAction {
@@ -350,6 +356,7 @@ export interface AgentRecommendation {
   transcript_timestamp: string | null;
   call_id: string;
   updated_prompt: string | null;
+  base_prompt: string | null;
   combined_prompt: string | null;
   agent_version: number | null;
   version_created_at: number | null;

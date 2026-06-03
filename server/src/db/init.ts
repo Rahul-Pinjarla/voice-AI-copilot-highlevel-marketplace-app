@@ -143,6 +143,9 @@ function runAlterMigrations(db: Database.Database): void {
   if (!recCols.includes("auto_applied")) {
     db.exec("ALTER TABLE recommendations ADD COLUMN auto_applied INTEGER NOT NULL DEFAULT 0;");
   }
+  if (!recCols.includes("base_prompt")) {
+    db.exec("ALTER TABLE recommendations ADD COLUMN base_prompt TEXT;");
+  }
 
   const analysisCols = (db.prepare("PRAGMA table_info(analyses)").all() as Array<{ name: string }>).map((c) => c.name);
   if (!analysisCols.includes("combined_prompt")) {
@@ -233,4 +236,14 @@ function resetStuckAnalyses(db: Database.Database): void {
   if (result.changes > 0) {
     console.log(`[db] Reset ${result.changes} stuck analyses to pending`);
   }
+}
+
+export function createFreshDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  migrate(db);
+  runAlterMigrations(db);
+  resetStuckAnalyses(db);
+  return db;
 }

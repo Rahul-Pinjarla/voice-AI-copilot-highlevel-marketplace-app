@@ -80,6 +80,7 @@ export interface Recommendation {
   current_value: string | null;
   suggested_value: string | null;
   updated_prompt: string | null;
+  base_prompt: string | null;
 }
 
 export interface UseAction {

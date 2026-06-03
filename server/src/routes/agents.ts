@@ -285,7 +285,7 @@ router.get("/:id/recommendations", (req, res, next) => {
       SELECT r.id, r.target_kpi_name, r.action, r.suggested_change,
              r.target_type, r.priority, r.status, r.auto_applied, r.agent_field,
              r.current_value, r.suggested_value, r.transcript_timestamp,
-             r.updated_prompt,
+             r.updated_prompt, r.base_prompt,
              c.id as call_id,
              an.combined_prompt,
              av.version as agent_version,
@@ -389,6 +389,32 @@ router.patch("/:id/success-criteria", (req, res, next) => {
     const { success_criteria } = req.body as { success_criteria: string };
     updateAgentSuccessCriteria(db, agent.id, req.session.locationId!, success_criteria ?? "");
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// Generate or refine success criteria using LLM
+router.post("/:id/generate-criteria", async (req, res, next) => {
+  try {
+    const db = getDb();
+    const agent = getAgent(db, req.params.id, req.session.locationId!);
+    if (!agent) throw new ApiError("NOT_FOUND", "Agent not found", 404);
+
+    const { source, input } = req.body as { source: "prompt" | "refine"; input?: string };
+    const llm = getLLMClient();
+
+    let criteria: string;
+    if (source === "prompt") {
+      const prompt = agent.system_prompt ?? "";
+      if (!prompt.trim()) throw new ApiError("INVALID_INPUT", "Agent has no system prompt to generate from", 400);
+      criteria = await llm.generateCriteriaFromPrompt(prompt);
+    } else if (source === "refine") {
+      if (!input?.trim()) throw new ApiError("INVALID_INPUT", "input is required for refine mode", 400);
+      criteria = await llm.refineCriteria(input);
+    } else {
+      throw new ApiError("INVALID_INPUT", "source must be 'prompt' or 'refine'", 400);
+    }
+
+    res.json({ criteria });
   } catch (err) { next(err); }
 });
 

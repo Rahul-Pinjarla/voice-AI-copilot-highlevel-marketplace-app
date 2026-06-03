@@ -146,6 +146,32 @@ When Agent Settings are provided:
   derailed the call and reminders were disabled or set too late, recommend enabling or tightening them.`;
 
 
+const GENERATE_CRITERIA_FROM_PROMPT_SYSTEM = `You are a Voice AI performance strategist. Given an agent's system prompt, write a clear and specific success criteria that captures what excellent performance looks like for this agent.
+
+Cover all three of these angles:
+1. Primary business outcome — what must the agent ultimately achieve on each call (e.g. book an appointment, qualify a lead, resolve an issue, collect information)?
+2. Behavioral standards — how must the agent conduct itself (tone, compliance, objection handling, specific phrases or steps it must follow)?
+3. Measurable thresholds — where possible, name a concrete standard (e.g. "collect name and email on every call", "offer a booking before ending the call", "never let a caller hang up without a next step").
+
+Rules:
+- Be specific to this agent's domain and goals — do not write generic statements
+- Write 3–5 sentences. Put EACH sentence on its own line separated by a blank line.
+- Avoid vague filler like "ensure quality" or "perform well" — name the actual behaviors
+
+Return only the criteria text. No labels, no bullet points, no markdown.`;
+
+const REFINE_CRITERIA_SYSTEM = `You are a Voice AI performance strategist. The user has described their goal for a voice AI agent in rough terms. Expand and rewrite it as a clear, specific, actionable success criteria.
+
+Rules:
+- Preserve the user's intent — do not invent goals they did not mention
+- Expand vague language into observable, concrete standards (e.g. "book more appointments" → specify what the booking moment should look like and when it should happen)
+- Where the user mentions quality, name the specific behaviors that define quality for their context
+- Add measurable thresholds where they can be reasonably inferred from the user's intent
+- Write 3–5 sentences. Put EACH sentence on its own line separated by a blank line.
+- Avoid generic filler like "ensure the agent performs well"
+
+Return only the refined criteria text. No labels, no bullet points, no markdown.`;
+
 const SUGGEST_FROM_CRITERIA_SYSTEM = `You are a Voice AI Goal designer. Given a user's success criteria for their voice AI agent, return exactly 5 relevant Goals as a JSON array:
 [{
   "kpi_name": string (snake_case),
@@ -235,6 +261,14 @@ export abstract class BaseLLMAdapter {
   async suggestKpisForCriteria(criteria: string): Promise<KpiSuggestion[]> {
     const text = extractJson(await try3Times(() => this.complete(SUGGEST_FROM_CRITERIA_SYSTEM, criteria, 768)));
     return clampSuggestions(JSON.parse(text) as KpiSuggestion[]);
+  }
+
+  async generateCriteriaFromPrompt(systemPrompt: string): Promise<string> {
+    return (await try3Times(() => this.complete(GENERATE_CRITERIA_FROM_PROMPT_SYSTEM, systemPrompt, 512))).trim();
+  }
+
+  async refineCriteria(userInput: string): Promise<string> {
+    return (await try3Times(() => this.complete(REFINE_CRITERIA_SYSTEM, userInput, 512))).trim();
   }
 
 }

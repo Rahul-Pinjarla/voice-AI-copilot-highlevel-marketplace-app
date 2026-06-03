@@ -122,14 +122,47 @@
               </div>
             </div>
             <div class="criteria-body">
-              <p class="criteria-hint">Describe what success looks like for this agent. AI will suggest Goals to measure it.</p>
+              <p class="criteria-hint">Describe what a great call looks like, or let AI write it from the agent's prompt.</p>
+              <div class="criteria-gen-row">
+                <button
+                  class="btn btn-secondary btn-sm criteria-gen-btn"
+                  @click="runGenerateCriteriaFromPrompt"
+                  :disabled="generatingCriteria || isReadonly || !agent?.system_prompt"
+                  :title="agent?.system_prompt ? 'Generate criteria from the agent\'s system prompt' : 'No system prompt available'"
+                >
+                  <template v-if="generatingCriteria && criteriaGenSource === 'prompt'">
+                    <span class="spinner spinner-xs" />
+                    Generating…
+                  </template>
+                  <template v-else>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M5 12H2"/><path d="M22 12h-3"/><path d="M6 6l1.5 1.5"/><path d="M16.5 16.5L18 18"/><path d="M6 18l1.5-1.5"/><path d="M16.5 7.5L18 6"/><circle cx="12" cy="12" r="3"/></svg>
+                    Generate from agent prompt
+                  </template>
+                </button>
+                <button
+                  class="btn btn-secondary btn-sm criteria-gen-btn"
+                  @click="runRefineCriteria"
+                  :disabled="generatingCriteria || isReadonly || !successCriteria.trim()"
+                  title="Let AI expand and sharpen what you've written"
+                >
+                  <template v-if="generatingCriteria && criteriaGenSource === 'refine'">
+                    <span class="spinner spinner-xs" />
+                    Refining…
+                  </template>
+                  <template v-else>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8L19 13"/><path d="M15 9h0"/><path d="M17.8 6.2L19 5"/><path d="M3 21l9-9"/><path d="M12.2 6.2L11 5"/></svg>
+                    Refine with AI
+                  </template>
+                </button>
+              </div>
               <textarea
                 v-model="successCriteria"
-                placeholder="e.g., Book appointments with ≥80% of qualified leads, handle objections gracefully, and collect complete contact information on every call…"
+                placeholder="e.g., Book appointments with qualified leads who express clear intent. Collect name, number, and preferred time on every call. Handle price objections by focusing on value. Never end a call without offering a concrete next step."
                 class="criteria-textarea"
+                :disabled="generatingCriteria"
               />
-              <button class="btn btn-primary btn-sm" @click="saveCriteria" :disabled="savingCriteria || isReadonly">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8L19 13"/><path d="M15 9h0"/><path d="M17.8 6.2L19 5"/><path d="M3 21l9-9"/><path d="M12.2 6.2L11 5"/></svg>
+              <button class="btn btn-primary btn-sm" @click="saveCriteria" :disabled="savingCriteria || generatingCriteria || isReadonly || !successCriteria.trim()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 {{ savingCriteria ? 'Saving…' : 'Save & Refresh Goals' }}
               </button>
             </div>
@@ -484,6 +517,7 @@
               :show-target-type="true"
               :show-open-call="true"
               :show-copy-prompt="!!agentPrompt && rec.target_type === 'prompt'"
+              :current-prompt="agentPrompt || undefined"
               :readonly="isReadonly"
               @apply="applyRec(rec.id)"
               @dismiss="dismissRec(rec.id)"
@@ -628,6 +662,8 @@ const agentMode = ref<"manual" | "auto">("manual");
 const savingMode = ref(false);
 const successCriteria = ref("");
 const savingCriteria = ref(false);
+const generatingCriteria = ref(false);
+const criteriaGenSource = ref<"prompt" | "refine" | null>(null);
 const kpiTab = ref<"applied" | "recommended">("applied");
 const suggestedKpisForCriteria = ref<Array<KpiSuggestion & { selected: boolean }>>([]);
 const suggestingCriteriaKpis = ref(false);
@@ -728,6 +764,35 @@ async function setMode(mode: "manual" | "auto") {
       agentMode.value = mode;
       if (agent.value) agent.value.mode = mode;
     } finally { savingMode.value = false; }
+  }
+}
+
+async function runGenerateCriteriaFromPrompt() {
+  generatingCriteria.value = true;
+  criteriaGenSource.value = "prompt";
+  try {
+    const { criteria } = await api.agents.generateCriteria(agentId.value, "prompt");
+    successCriteria.value = criteria;
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : "Failed to generate criteria");
+  } finally {
+    generatingCriteria.value = false;
+    criteriaGenSource.value = null;
+  }
+}
+
+async function runRefineCriteria() {
+  if (!successCriteria.value.trim()) return;
+  generatingCriteria.value = true;
+  criteriaGenSource.value = "refine";
+  try {
+    const { criteria } = await api.agents.generateCriteria(agentId.value, "refine", successCriteria.value);
+    successCriteria.value = criteria;
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : "Failed to refine criteria");
+  } finally {
+    generatingCriteria.value = false;
+    criteriaGenSource.value = null;
   }
 }
 
@@ -910,7 +975,7 @@ const recsGroupedByVersion = computed<RecGroup[]>(() => {
   }
   return [...map.values()].sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
 });
-const agentPrompt = computed(() => agentSettings.value?.agentPrompt ?? "");
+const agentPrompt = computed(() => agentSettings.value?.agentPrompt ?? agent.value?.system_prompt ?? "");
 
 async function applyRec(id: string) {
   applyingRecId.value = id;
@@ -1250,20 +1315,35 @@ h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px
   line-height: 1.5;
   margin: 0;
 }
+.criteria-gen-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.criteria-gen-btn {
+  flex: 1;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
 .criteria-textarea {
   flex: 1;
-  min-height: 340px;
-  padding: 10px 12px;
+  min-height: 280px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13.5px;
   font-family: inherit;
-  line-height: 1.6;
+  line-height: 1.75;
   resize: none;
   background: var(--surface);
   color: var(--ink-1);
+  transition: opacity 0.15s;
+  white-space: pre-wrap;
 }
+.criteria-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 .criteria-textarea:focus { outline: none; border-color: var(--ink-1); }
+.spinner-xs { width: 11px; height: 11px; border-width: 1.5px; }
 
 /* ── KPI sub-tabs ── */
 .kpi-card-head { flex-wrap: wrap; gap: 8px; }

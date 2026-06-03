@@ -14,6 +14,7 @@ import {
 import type { AgentSettings } from "../types";
 import { getLLMClient } from "./llm";
 import { applyRecommendation, type RecordToApply } from "./applyRecommendation";
+import { schedulePassRateCheck } from "./passRateMonitor";
 
 export async function analyzeCall(db: Database.Database, callId: string): Promise<void> {
   const call = db
@@ -63,6 +64,7 @@ export async function analyzeCall(db: Database.Database, callId: string): Promis
     });
 
     if (result.recommendations.length > 0) {
+      const basePrompt = agentSettings?.agentPrompt ?? null;
       insertRecommendations(
         db,
         result.recommendations.map((r) => ({
@@ -79,6 +81,7 @@ export async function analyzeCall(db: Database.Database, callId: string): Promis
           current_value: r.current_value ?? null,
           suggested_value: r.suggested_value ?? null,
           updated_prompt: r.updated_prompt ?? null,
+          base_prompt: basePrompt,
         })),
       );
     }
@@ -137,6 +140,7 @@ export async function analyzeCall(db: Database.Database, callId: string): Promis
     }
 
     updateCallStatus(db, callId, "done");
+    schedulePassRateCheck(db, call.agent_id, call.location_id);
   } catch (err) {
     console.error(`[analysis] Failed for call ${callId}:`, err);
     const analysisId = randomUUID();

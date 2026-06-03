@@ -164,6 +164,7 @@
               :key="rec.id"
               :rec="rec"
               :show-copy-prompt="!!agentPrompt"
+              :current-prompt="agentPrompt || undefined"
               @apply="applyRec(rec.id)"
               @dismiss="dismissRec(rec.id)"
               @copy-prompt="copyUpdatedPrompt(rec)"

@@ -312,18 +312,19 @@ export function insertRecommendations(
   recs: Omit<Recommendation, "status" | "applied_at">[],
 ): void {
   const stmt = db.prepare(`
-    INSERT INTO recommendations (id, analysis_id, target_kpi_name, action, suggested_change, target_type, priority, transcript_timestamp, agent_field, current_value, suggested_value, updated_prompt)
-    VALUES (@id, @analysis_id, @target_kpi_name, @action, @suggested_change, @target_type, @priority, @transcript_timestamp, @agent_field, @current_value, @suggested_value, @updated_prompt)
+    INSERT INTO recommendations (id, analysis_id, target_kpi_name, action, suggested_change, target_type, priority, transcript_timestamp, agent_field, current_value, suggested_value, updated_prompt, base_prompt)
+    VALUES (@id, @analysis_id, @target_kpi_name, @action, @suggested_change, @target_type, @priority, @transcript_timestamp, @agent_field, @current_value, @suggested_value, @updated_prompt, @base_prompt)
   `);
   db.transaction(() => {
     for (const rec of recs) {
-      const row = rec as typeof rec & { agent_field?: string | null; current_value?: string | null; suggested_value?: string | null; updated_prompt?: string | null };
+      const row = rec as typeof rec & { agent_field?: string | null; current_value?: string | null; suggested_value?: string | null; updated_prompt?: string | null; base_prompt?: string | null };
       stmt.run({
         ...row,
         agent_field: row.agent_field ?? null,
         current_value: row.current_value ?? null,
         suggested_value: row.suggested_value ?? null,
         updated_prompt: row.updated_prompt ?? null,
+        base_prompt: row.base_prompt ?? null,
       });
     }
   })();
@@ -465,7 +466,7 @@ export interface DashboardAgent {
   name: string;
   configured: number;
   active: boolean;
-  calls_today: number;
+  total_calls: number;
   pass_rate: number | null;
   last_call_score: number | null;
   top_failing_kpi: string | null;
@@ -476,15 +477,13 @@ export function getDashboardData(
   db: Database.Database,
   locationId: string,
 ): DashboardAgent[] {
-  const todayStart = Math.floor(Date.now() / 1000) - 86400;
-
   return db.prepare(`
     SELECT
       ag.id,
       ag.name,
       ag.configured,
       ag.active,
-      COUNT(DISTINCT CASE WHEN c.ingested_at >= @todayStart THEN c.id END) as calls_today,
+      COUNT(DISTINCT c.id) as total_calls,
       AVG(CASE WHEN an.overall_score IS NOT NULL THEN MIN(1.0, MAX(0.0, an.overall_score)) END) as pass_rate,
       (
         SELECT MIN(1.0, MAX(0.0, a2.overall_score))
@@ -513,7 +512,7 @@ export function getDashboardData(
     WHERE ag.location_id = @locationId
     GROUP BY ag.id
     ORDER BY ag.created_at DESC
-  `).all({ locationId, todayStart }) as DashboardAgent[];
+  `).all({ locationId }) as DashboardAgent[];
 }
 
 // ── Agent versions ────────────────────────────────────────────────────────────
@@ -770,6 +769,29 @@ export function markRecommendationAutoApplied(db: Database.Database, recId: stri
   db.prepare(
     "UPDATE recommendations SET status = 'applied', auto_applied = 1, applied_at = unixepoch() WHERE id = ?",
   ).run(recId);
+}
+
+// ── Pass-rate monitor queries ─────────────────────────────────────────────────
+
+export function getAnalyzedCallCount(db: Database.Database, agentId: string): number {
+  const row = db
+    .prepare("SELECT COUNT(*) as count FROM calls WHERE agent_id = ? AND analysis_status = 'done'")
+    .get(agentId) as { count: number };
+  return row.count;
+}
+
+export function getLastNCallScores(db: Database.Database, agentId: string, n: number): number[] {
+  const rows = db.prepare(`
+    SELECT MIN(1.0, MAX(0.0, a.overall_score)) AS score
+    FROM calls c
+    JOIN analyses a ON a.call_id = c.id
+      AND a.id = (SELECT id FROM analyses WHERE call_id = c.id ORDER BY created_at DESC LIMIT 1)
+    WHERE c.agent_id = ? AND c.analysis_status = 'done'
+      AND a.overall_score IS NOT NULL AND a.error IS NULL
+    ORDER BY c.ingested_at DESC
+    LIMIT ?
+  `).all(agentId, n) as Array<{ score: number }>;
+  return rows.map((r) => r.score);
 }
 
 // ── Use action queries ────────────────────────────────────────────────────────
